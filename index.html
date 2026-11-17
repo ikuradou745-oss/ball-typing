@@ -13,15 +13,302 @@
       property="og:description"
       content="タイピングのモチベーションを高める、ブロスタ・ダダサバイバー風のボールタイピング"
     />
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23F6C116' stroke='%23000' stroke-width='3'/%3E%3Ccircle cx='12' cy='11' r='3.5' fill='%23FFF'/%3E%3C/svg%3E"
+    />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=M+PLUS+Rounded+1c:wght@500;700;800;900&family=Outfit:wght@700;800;900&display=swap"
       rel="stylesheet"
     />
+    <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <div class="app-shell">
+      <!-- Top HUD Bar: Unified Profile + Settings Button on Top-Right -->
+      <header class="top-hud">
+        <button
+          id="open-settings-btn"
+          type="button"
+          class="arcade-btn hud-profile-btn"
+          aria-label="設定とプロフィールを開く"
+          title="設定・プロフィール"
+        >
+          <span class="hud-avatar-frame">
+            <canvas
+              id="hud-avatar-canvas"
+              width="16"
+              height="16"
+              class="pixelated avatar-canvas"
+              aria-label="プレイヤーアイコン"
+              role="img"
+            ></canvas>
+          </span>
+          <span id="hud-username" class="hud-username">プレイヤー1</span>
+          <span class="hud-gear-badge" aria-hidden="true">
+            <svg viewBox="0 0 24 24" class="icon-svg" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+          </span>
+        </button>
+      </header>
+
+      <!-- Center Home Menu Stage -->
+      <main class="home-stage">
+        <div class="title-wrap">
+          <h1 class="game-title arcade-outline-title">ボールタイピング</h1>
+        </div>
+
+        <nav class="menu-stack" aria-label="メインメニュー">
+          <button type="button" class="arcade-btn menu-btn menu-btn-play" data-menu-btn>
+            プレイ
+          </button>
+          <button type="button" class="arcade-btn menu-btn menu-btn-shop" data-menu-btn>
+            <span class="arcade-outline-white">ショップ</span>
+          </button>
+          <button type="button" class="arcade-btn menu-btn menu-btn-equip" data-menu-btn>
+            装備
+          </button>
+        </nav>
+      </main>
+    </div>
+
+    <!-- Initial Notice Modal -->
+    <div
+      id="notice-modal"
+      class="modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="notice-modal-title"
+    >
+      <div class="arcade-card notice-dialog">
+        <div class="modal-header">
+          <h2 id="notice-modal-title" class="modal-title arcade-outline-white">注意項目</h2>
+        </div>
+
+        <div class="notice-body">
+          <p class="notice-highlight">
+            ボールタイピングは、ゲームではなくタイピングです。ゲームではないです。
+          </p>
+          <p>
+            このタイピングは、タイピングのモチベーションを増加させるためにあるものです。このタイピングは、ボールを自分で動かせない、などのゲーム要素は少なめです。
+          </p>
+          <p>
+            逆に、強いボールが欲しいから周回する。すると、タイピングをする必要があるので逆にタイピングがどんどん上手くなる。というwin-winの関係にあります。
+          </p>
+          <p>このような狙いでこのようなタイピングを作りました。</p>
+        </div>
+
+        <div class="modal-footer modal-footer-center">
+          <button id="notice-close-btn" type="button" class="arcade-btn btn-gold btn-close-notice">
+            閉じる
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings & Profile Modal -->
+    <div
+      id="settings-modal"
+      class="modal-backdrop hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="settings-modal-title"
+    >
+      <div class="arcade-card settings-dialog">
+        <div class="modal-header modal-header-between">
+          <h2 id="settings-modal-title" class="modal-title arcade-outline-white">メニュー</h2>
+          <button
+            id="settings-x-btn"
+            type="button"
+            class="arcade-btn-sm btn-close-x"
+            aria-label="閉じる"
+          >
+            <svg viewBox="0 0 24 24" class="icon-svg" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 6 6 18" />
+              <path d="m6 6 12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- Tab Bar: 「設定」「プロフィール」 -->
+        <div class="tab-bar" role="tablist" aria-label="設定メニュータブ">
+          <button
+            id="tab-btn-settings"
+            type="button"
+            role="tab"
+            aria-selected="true"
+            class="arcade-btn-sm tab-btn tab-btn-active-gold"
+          >
+            <svg viewBox="0 0 24 24" class="icon-svg-sm" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+            <span>設定</span>
+          </button>
+
+          <button
+            id="tab-btn-profile"
+            type="button"
+            role="tab"
+            aria-selected="false"
+            class="arcade-btn-sm tab-btn"
+          >
+            <svg viewBox="0 0 24 24" class="icon-svg-sm" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
+            <span id="tab-label-profile">プロフィール</span>
+          </button>
+        </div>
+
+        <div class="modal-scroll-area">
+          <!-- Settings Tab Panel -->
+          <div id="panel-settings" role="tabpanel" aria-label="設定" class="settings-panel">
+            <div class="panel-box volume-box">
+              <div class="volume-header">
+                <div class="volume-title-wrap">
+                  <span id="volume-icon-wrap" aria-hidden="true"></span>
+                  <label for="volume-slider" class="volume-label">音量</label>
+                </div>
+                <span id="volume-badge" class="volume-badge">70</span>
+              </div>
+
+              <input
+                id="volume-slider"
+                type="range"
+                min="0"
+                max="100"
+                step="1"
+                value="70"
+                aria-label="音量（0から100）"
+                class="volume-slider"
+              />
+
+              <div class="volume-ticks">
+                <span>0</span>
+                <span>50</span>
+                <span>100</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Profile Tab Panel -->
+          <div id="panel-profile" role="tabpanel" aria-label="プロフィール" class="profile-panel hidden">
+            <div class="profile-left">
+              <div class="preview-card">
+                <p class="preview-caption">表示プレビュー</p>
+                <div class="preview-badge">
+                  <div class="preview-avatar-frame">
+                    <canvas
+                      id="preview-avatar-canvas"
+                      width="16"
+                      height="16"
+                      class="pixelated"
+                      aria-label="アイコンプレビュー"
+                      role="img"
+                    ></canvas>
+                  </div>
+                  <div class="preview-meta">
+                    <div id="preview-username" class="preview-username">プレイヤー1</div>
+                    <div class="preview-sub">16×16 ICON</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="panel-box">
+                <div class="field-header">
+                  <label for="username-input" class="field-label">ユーザー名</label>
+                  <span id="username-counter" class="field-counter">6 / 12文字</span>
+                </div>
+                <input
+                  id="username-input"
+                  type="text"
+                  maxlength="12"
+                  placeholder="2〜12文字で入力"
+                  class="text-input"
+                />
+                <p id="username-hint" class="field-hint">
+                  2文字以上12文字以内で設定できます
+                </p>
+              </div>
+            </div>
+
+            <div class="panel-box editor-box">
+              <div class="editor-top">
+                <h3 class="editor-title">16×16 アイコン</h3>
+                <div class="editor-actions">
+                  <button id="mirror-btn" type="button" class="arcade-btn-sm mini-btn" aria-pressed="false">
+                    左右対称
+                  </button>
+                  <button id="undo-btn" type="button" class="arcade-btn-sm mini-btn" disabled>
+                    戻す
+                  </button>
+                  <button id="clear-btn" type="button" class="arcade-btn-sm mini-btn mini-btn-danger">
+                    全消去
+                  </button>
+                </div>
+              </div>
+
+              <div class="tool-grid">
+                <button type="button" class="arcade-btn-sm tool-btn tool-btn-active" data-tool="pen" aria-pressed="true">
+                  ペン
+                </button>
+                <button type="button" class="arcade-btn-sm tool-btn" data-tool="eraser" aria-pressed="false">
+                  消しゴム
+                </button>
+                <button type="button" class="arcade-btn-sm tool-btn" data-tool="fill" aria-pressed="false">
+                  ぬりつぶし
+                </button>
+                <button type="button" class="arcade-btn-sm tool-btn" data-tool="eyedropper" aria-pressed="false">
+                  スポイト
+                </button>
+              </div>
+
+              <div class="pixel-grid-wrap">
+                <div
+                  id="pixel-grid"
+                  class="pixel-grid"
+                  role="grid"
+                  aria-label="16かける16ピクセルアイコンキャンバス"
+                ></div>
+              </div>
+
+              <div class="palette-section">
+                <div class="palette-header">
+                  <span class="palette-label">カラー選択</span>
+                  <label class="free-color-picker">
+                    <span>自由な色</span>
+                    <input
+                      id="free-color-input"
+                      type="color"
+                      value="#111827"
+                      aria-label="自由な色を選択"
+                    />
+                    <span id="free-color-hex" class="free-color-hex">#111827</span>
+                  </label>
+                </div>
+                <div id="color-swatches" class="color-swatches"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer modal-footer-end">
+          <button id="settings-cancel-btn" type="button" class="arcade-btn btn-white">
+            キャンセル
+          </button>
+          <button id="settings-save-btn" type="button" class="arcade-btn btn-green">
+            保存する
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="./app.js"></script>
   </body>
 </html>
