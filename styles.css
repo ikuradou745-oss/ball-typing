@@ -134,17 +134,33 @@ body {
   outline-offset: 2px;
 }
 
-/* Top-Right Unified HUD Button */
+/* Top-Right Unified HUD Button & Back Button */
 .top-hud {
   position: relative;
   z-index: 10;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
+  gap: 12px;
   padding: 16px 16px 0;
 }
 
+.hud-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 46px;
+  padding: 6px 14px 6px 10px;
+  border-radius: 14px;
+  background-color: #fffdf7;
+  color: #0f172a;
+  font-size: 16px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
 .hud-profile-btn {
+  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -265,6 +281,266 @@ body {
 .menu-btn-equip {
   background-color: #28c76f;
   color: #000000;
+}
+
+/* Equip Screen Stage (Reference Mint Board + Pixel Ball Cards) */
+.equip-stage {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex: 1;
+  justify-content: center;
+  padding: 16px 16px 36px;
+}
+
+.equip-board {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
+  max-width: 1120px;
+  padding: 20px;
+  border-radius: 18px;
+  background-color: #a6dec0;
+}
+
+.equip-section-top {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.equip-section-bottom {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px 20px;
+  border: 3px solid #000000;
+  border-radius: 14px;
+  background-color: #d9f3e5;
+}
+
+.equip-section-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 3px solid #000000;
+}
+
+.equip-title-group {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.equip-section-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 900;
+  color: #0f172a;
+}
+
+.equip-count-text {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #1e293b;
+}
+
+.equip-hint-text {
+  font-size: 13px;
+  font-weight: 800;
+  color: #1e293b;
+}
+
+.equip-feedback {
+  align-self: flex-start;
+  margin: 0;
+  padding: 8px 14px;
+  border: 3px solid #000000;
+  border-radius: 10px;
+  background-color: #fef2f2;
+  box-shadow: 0 3px 0 #000000;
+  font-size: 13px;
+  font-weight: 900;
+  color: #b91c1c;
+}
+
+.equip-search-wrap {
+  width: 100%;
+}
+
+.equip-search-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 3px solid #000000;
+  border-radius: 10px;
+  background-color: #ffffff;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+  outline: none;
+}
+
+.equip-search-input::placeholder {
+  color: #64748b;
+}
+
+.equip-search-input:focus {
+  box-shadow: 0 0 0 3px rgba(49, 150, 226, 0.35);
+}
+
+.equipped-slots-row,
+.owned-balls-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.ball-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 108px;
+  min-height: 136px;
+  padding: 7px;
+  border: 3px solid #000000;
+  border-radius: 10px;
+  box-shadow: 0 4px 0 #000000;
+  color: #0f172a;
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    transform 100ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 100ms cubic-bezier(0.16, 1, 0.3, 1),
+    filter 120ms ease;
+}
+
+.ball-card:hover {
+  filter: brightness(1.03);
+}
+
+.ball-card:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 #000000;
+}
+
+.ball-card:focus-visible {
+  outline: 2px solid #000000;
+  outline-offset: 2px;
+}
+
+.ball-card-equipped-highlight {
+  box-shadow:
+    0 4px 0 #000000,
+    0 0 0 3px #28c76f;
+}
+
+.ball-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  width: 100%;
+}
+
+.ball-tag {
+  padding: 1px 4px;
+  border: 1.5px solid #000000;
+  border-radius: 4px;
+  background-color: #ffffff;
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1.25;
+  color: #0f172a;
+  white-space: nowrap;
+}
+
+.ball-level-tag {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.ball-sprite-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+}
+
+.ball-pixel-img {
+  display: block;
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+}
+
+.ball-nameplate {
+  width: 100%;
+  padding: 3px 4px;
+  border: 2px solid #000000;
+  border-radius: 6px;
+  background-color: #ffffff;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1.2;
+  color: #0f172a;
+  text-align: center;
+  word-break: keep-all;
+}
+
+.ball-slot-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 108px;
+  min-height: 136px;
+  padding: 8px;
+  border: 3px dashed #334155;
+  border-radius: 10px;
+  background-color: rgba(255, 255, 255, 0.38);
+  font-size: 11px;
+  font-weight: 800;
+  color: #334155;
+  text-align: center;
+}
+
+.ball-empty-msg {
+  width: 100%;
+  padding: 20px 12px;
+  font-size: 14px;
+  font-weight: 800;
+  color: #475569;
+  text-align: center;
+}
+
+@keyframes equip-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-4px);
+  }
+  75% {
+    transform: translateX(4px);
+  }
+}
+
+.is-shaking {
+  animation: equip-shake 220ms ease-in-out;
 }
 
 /* Modal Shared */
@@ -862,6 +1138,18 @@ body {
     font-size: 48px;
   }
 
+  .equip-stage {
+    padding: 20px 24px 44px;
+  }
+
+  .equip-board {
+    padding: 24px;
+  }
+
+  .equip-section-title {
+    font-size: 20px;
+  }
+
   .modal-backdrop {
     padding: 20px;
   }
@@ -901,7 +1189,10 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .arcade-btn,
   .arcade-btn-sm,
-  .color-swatch {
+  .ball-card,
+  .color-swatch,
+  .is-shaking {
     transition: none;
+    animation: none;
   }
 }

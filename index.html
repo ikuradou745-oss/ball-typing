@@ -28,8 +28,20 @@
   </head>
   <body>
     <div class="app-shell">
-      <!-- Top HUD Bar: Unified Profile + Settings Button on Top-Right -->
+      <!-- Top HUD Bar: Back Button (Equip screen) + Unified Profile & Settings Button (Top-Right) -->
       <header class="top-hud">
+        <button
+          id="equip-back-btn"
+          type="button"
+          class="arcade-btn-sm hud-back-btn hidden"
+          aria-label="ホームに戻る"
+        >
+          <svg viewBox="0 0 24 24" class="icon-svg" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m15 18-6-6 6-6" />
+          </svg>
+          <span>戻る</span>
+        </button>
+
         <button
           id="open-settings-btn"
           type="button"
@@ -58,7 +70,7 @@
       </header>
 
       <!-- Center Home Menu Stage -->
-      <main class="home-stage">
+      <main id="home-screen" class="home-stage">
         <div class="title-wrap">
           <h1 class="game-title arcade-outline-title">ボールタイピング</h1>
         </div>
@@ -70,10 +82,53 @@
           <button type="button" class="arcade-btn menu-btn menu-btn-shop" data-menu-btn>
             <span class="arcade-outline-white">ショップ</span>
           </button>
-          <button type="button" class="arcade-btn menu-btn menu-btn-equip" data-menu-btn>
+          <button id="open-equip-btn" type="button" class="arcade-btn menu-btn menu-btn-equip">
             装備
           </button>
         </nav>
+      </main>
+
+      <!-- Equip Screen Stage -->
+      <main id="equip-screen" class="equip-stage hidden" aria-label="装備画面">
+        <div class="arcade-card equip-board">
+          <!-- Upper Section: Equipped Balls (Min 1 / Max 4) -->
+          <section class="equip-section-top" aria-labelledby="equipped-section-title">
+            <div class="equip-section-header">
+              <div class="equip-title-group">
+                <h2 id="equipped-section-title" class="equip-section-title">
+                  装備しているボール (最大4つ)
+                </h2>
+                <span id="equipped-count-text" class="equip-count-text">1 / 4</span>
+              </div>
+              <span class="equip-hint-text">タップして外す</span>
+            </div>
+            <p id="equip-status-msg" class="equip-feedback hidden" role="status" aria-live="polite"></p>
+            <div id="equipped-slots-grid" class="equipped-slots-row"></div>
+          </section>
+
+          <!-- Lower Section: Owned Balls -->
+          <section class="equip-section-bottom" aria-labelledby="owned-section-title">
+            <div class="equip-section-header">
+              <div class="equip-title-group">
+                <h2 id="owned-section-title" class="equip-section-title">持っているボール</h2>
+                <span id="owned-count-text" class="equip-count-text">1個</span>
+              </div>
+              <span class="equip-hint-text">タップして装備</span>
+            </div>
+
+            <div class="equip-search-wrap">
+              <input
+                id="ball-search-input"
+                type="search"
+                placeholder="名前を検索してボールを探す..."
+                aria-label="名前を検索してボールを探す"
+                class="equip-search-input"
+              />
+            </div>
+
+            <div id="owned-balls-grid" class="owned-balls-row"></div>
+          </section>
+        </div>
       </main>
     </div>
 

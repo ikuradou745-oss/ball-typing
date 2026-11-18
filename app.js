@@ -1,3 +1,5 @@
+import { BALL_CATALOG, RARITY_STYLES } from './assets/ballImages.js';
+
 const GRID_SIZE = 16;
 const TOTAL_PIXELS = GRID_SIZE * GRID_SIZE;
 const DEFAULT_PIXEL_COLOR = '#FFFFFF';
@@ -5,6 +7,9 @@ const DEFAULT_USERNAME = 'プレイヤー1';
 const DEFAULT_VOLUME = 70;
 const MIN_USERNAME_LENGTH = 2;
 const MAX_USERNAME_LENGTH = 12;
+const MIN_EQUIPPED_BALLS = 1;
+const MAX_EQUIPPED_BALLS = 4;
+const DEFAULT_BALL_ID = 'sponge_ball';
 const STORAGE_KEY = 'ball_typing_profile_v1';
 
 const PALETTE_COLORS = [
@@ -83,6 +88,28 @@ function clampVolume(value) {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
 
+function normalizeOwnedBalls(owned) {
+  const valid = Array.isArray(owned)
+    ? owned.filter((id) => typeof id === 'string' && Boolean(BALL_CATALOG[id]))
+    : [];
+  if (!valid.includes(DEFAULT_BALL_ID)) {
+    valid.unshift(DEFAULT_BALL_ID);
+  }
+  return Array.from(new Set(valid));
+}
+
+function normalizeEquippedBalls(equipped, ownedBalls) {
+  const ownedSet = new Set(ownedBalls);
+  const valid = Array.isArray(equipped)
+    ? Array.from(new Set(equipped.filter((id) => typeof id === 'string' && ownedSet.has(id))))
+    : [];
+  const capped = valid.slice(0, MAX_EQUIPPED_BALLS);
+  if (capped.length < MIN_EQUIPPED_BALLS) {
+    return [ownedBalls[0] || DEFAULT_BALL_ID];
+  }
+  return capped;
+}
+
 function loadProfile() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -91,6 +118,8 @@ function loadProfile() {
         username: DEFAULT_USERNAME,
         pixels: createDefaultPixels(),
         volume: DEFAULT_VOLUME,
+        ownedBalls: [DEFAULT_BALL_ID],
+        equippedBalls: [DEFAULT_BALL_ID],
       };
     }
     const parsed = JSON.parse(raw);
@@ -106,12 +135,16 @@ function loadProfile() {
         : createDefaultPixels();
     const volume =
       typeof parsed.volume === 'number' ? clampVolume(parsed.volume) : DEFAULT_VOLUME;
-    return { username, pixels, volume };
+    const ownedBalls = normalizeOwnedBalls(parsed.ownedBalls);
+    const equippedBalls = normalizeEquippedBalls(parsed.equippedBalls, ownedBalls);
+    return { username, pixels, volume, ownedBalls, equippedBalls };
   } catch {
     return {
       username: DEFAULT_USERNAME,
       pixels: createDefaultPixels(),
       volume: DEFAULT_VOLUME,
+      ownedBalls: [DEFAULT_BALL_ID],
+      equippedBalls: [DEFAULT_BALL_ID],
     };
   }
 }
@@ -207,6 +240,29 @@ function playSaveSound(vol) {
   }
 }
 
+function playErrorSound(vol) {
+  try {
+    const scale = clampVolume(vol) / 100;
+    if (scale <= 0) return;
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(210, now);
+    osc.frequency.linearRampToValueAtTime(145, now + 0.12);
+    gain.gain.setValueAtTime(0.08 * scale, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.13);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.14);
+  } catch {
+    // Optional audio
+  }
+}
+
 function renderAvatarCanvas(canvas, pixels) {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
@@ -221,6 +277,9 @@ function renderAvatarCanvas(canvas, pixels) {
 
 // App State
 let profile = loadProfile();
+let currentScreen = 'home';
+let ballSearchQuery = '';
+let equipFeedbackTimer = null;
 let draftVolume = profile.volume;
 let draftUsername = profile.username;
 let draftPixels = [...profile.pixels];
@@ -233,6 +292,17 @@ let isDrawing = false;
 let strokeSnapshot = null;
 
 // DOM Elements
+const homeScreenEl = document.getElementById('home-screen');
+const equipScreenEl = document.getElementById('equip-screen');
+const equipBackBtn = document.getElementById('equip-back-btn');
+const openEquipBtn = document.getElementById('open-equip-btn');
+const equipStatusMsg = document.getElementById('equip-status-msg');
+const equippedCountText = document.getElementById('equipped-count-text');
+const ownedCountText = document.getElementById('owned-count-text');
+const equippedSlotsGrid = document.getElementById('equipped-slots-grid');
+const ownedBallsGrid = document.getElementById('owned-balls-grid');
+const ballSearchInput = document.getElementById('ball-search-input');
+
 const hudAvatarCanvas = document.getElementById('hud-avatar-canvas');
 const hudUsernameEl = document.getElementById('hud-username');
 const openSettingsBtn = document.getElementById('open-settings-btn');
@@ -277,6 +347,151 @@ function renderHud() {
   hudUsernameEl.textContent = profile.username;
   renderAvatarCanvas(hudAvatarCanvas, profile.pixels);
   hudAvatarCanvas.setAttribute('aria-label', `${profile.username}のアイコン`);
+}
+
+function showEquipFeedback(message) {
+  equipStatusMsg.textContent = message;
+  equipStatusMsg.classList.remove('hidden');
+  if (equipFeedbackTimer) clearTimeout(equipFeedbackTimer);
+  equipFeedbackTimer = setTimeout(() => {
+    equipStatusMsg.classList.add('hidden');
+  }, 2400);
+}
+
+function triggerShake(el) {
+  if (!el) return;
+  el.classList.remove('is-shaking');
+  void el.offsetWidth;
+  el.classList.add('is-shaking');
+}
+
+function toggleEquipBall(ballId, triggerEl) {
+  const isEquipped = profile.equippedBalls.includes(ballId);
+  if (isEquipped) {
+    if (profile.equippedBalls.length <= MIN_EQUIPPED_BALLS) {
+      playErrorSound(profile.volume);
+      triggerShake(triggerEl);
+      showEquipFeedback('最低1つはボールを装備する必要があります');
+      return;
+    }
+    playClickSound(profile.volume);
+    profile.equippedBalls = profile.equippedBalls.filter((id) => id !== ballId);
+  } else {
+    if (profile.equippedBalls.length >= MAX_EQUIPPED_BALLS) {
+      playErrorSound(profile.volume);
+      triggerShake(triggerEl);
+      showEquipFeedback('装備できるボールは最大4つまでです');
+      return;
+    }
+    playOpenSound(profile.volume);
+    profile.equippedBalls = [...profile.equippedBalls, ballId];
+  }
+
+  equipStatusMsg.classList.add('hidden');
+  saveProfile(profile);
+  renderEquipScreen();
+}
+
+function createBallCardHTML(ball, footerLabel) {
+  const rarityInfo = RARITY_STYLES[ball.rarity] || RARITY_STYLES.common;
+  return {
+    bg: rarityInfo.cardBg,
+    html: `
+      <span class="ball-card-top">
+        <span class="ball-tag">${rarityInfo.label}</span>
+        <span class="ball-tag ball-level-tag">Lv.${ball.level}</span>
+      </span>
+      <span class="ball-sprite-wrap">
+        <img
+          src="${ball.imageSrc}"
+          alt="${ball.name}"
+          width="48"
+          height="48"
+          class="ball-pixel-img pixelated"
+        />
+      </span>
+      <span class="ball-nameplate">${footerLabel}</span>
+    `,
+  };
+}
+
+function renderEquipScreen() {
+  equippedCountText.textContent = `${profile.equippedBalls.length} / ${MAX_EQUIPPED_BALLS}`;
+  ownedCountText.textContent = `${profile.ownedBalls.length}個`;
+
+  // Upper: Equipped Balls (up to 4 slots)
+  equippedSlotsGrid.innerHTML = '';
+  for (let slotIndex = 0; slotIndex < MAX_EQUIPPED_BALLS; slotIndex++) {
+    const ballId = profile.equippedBalls[slotIndex];
+    const ball = ballId ? BALL_CATALOG[ballId] : null;
+    if (ball) {
+      const slotBtn = document.createElement('button');
+      const card = createBallCardHTML(ball, ball.name);
+      slotBtn.type = 'button';
+      slotBtn.className = 'ball-card';
+      slotBtn.style.backgroundColor = card.bg;
+      slotBtn.setAttribute('aria-label', `${ball.name}（装備中・タップで外す）`);
+      slotBtn.innerHTML = card.html;
+      slotBtn.addEventListener('click', () => toggleEquipBall(ball.id, slotBtn));
+      equippedSlotsGrid.appendChild(slotBtn);
+    } else {
+      const emptySlot = document.createElement('div');
+      emptySlot.className = 'ball-slot-empty';
+      emptySlot.innerHTML = `<span>空きスロット</span>`;
+      equippedSlotsGrid.appendChild(emptySlot);
+    }
+  }
+
+  // Lower: Owned Balls (with name search filter)
+  const query = ballSearchQuery.trim().toLowerCase();
+  const filteredOwned = profile.ownedBalls.filter((ballId) => {
+    const ball = BALL_CATALOG[ballId];
+    if (!ball) return false;
+    if (!query) return true;
+    return ball.name.toLowerCase().includes(query);
+  });
+
+  ownedBallsGrid.innerHTML = '';
+  if (filteredOwned.length === 0) {
+    const emptyMsg = document.createElement('p');
+    emptyMsg.className = 'ball-empty-msg';
+    emptyMsg.textContent = `「${ballSearchQuery.trim()}」に一致するボールが見つかりませんでした`;
+    ownedBallsGrid.appendChild(emptyMsg);
+    return;
+  }
+
+  filteredOwned.forEach((ballId) => {
+    const ball = BALL_CATALOG[ballId];
+    if (!ball) return;
+    const isEquipped = profile.equippedBalls.includes(ballId);
+    const cardBtn = document.createElement('button');
+    const card = createBallCardHTML(ball, `${ball.name} ×1`);
+    cardBtn.type = 'button';
+    cardBtn.className = `ball-card ${isEquipped ? 'ball-card-equipped-highlight' : ''}`;
+    cardBtn.style.backgroundColor = card.bg;
+    cardBtn.setAttribute('aria-pressed', String(isEquipped));
+    cardBtn.setAttribute(
+      'aria-label',
+      `${ball.name}：${isEquipped ? '装備中（タップで外す）' : '未装備（タップで装備）'}`
+    );
+    cardBtn.innerHTML = card.html;
+    cardBtn.addEventListener('click', () => toggleEquipBall(ball.id, cardBtn));
+    ownedBallsGrid.appendChild(cardBtn);
+  });
+}
+
+function setScreen(screen) {
+  currentScreen = screen;
+  const isEquip = currentScreen === 'equip';
+  homeScreenEl.classList.toggle('hidden', isEquip);
+  equipScreenEl.classList.toggle('hidden', !isEquip);
+  equipBackBtn.classList.toggle('hidden', !isEquip);
+  if (isEquip) {
+    equipStatusMsg.classList.add('hidden');
+    ballSearchQuery = '';
+    ballSearchInput.value = '';
+    renderEquipScreen();
+  }
 }
 
 function renderVolumeUI() {
@@ -490,6 +705,21 @@ document.querySelectorAll('[data-menu-btn]').forEach((btn) => {
   });
 });
 
+openEquipBtn.addEventListener('click', () => {
+  playOpenSound(profile.volume);
+  setScreen('equip');
+});
+
+equipBackBtn.addEventListener('click', () => {
+  playClickSound(profile.volume);
+  setScreen('home');
+});
+
+ballSearchInput.addEventListener('input', (e) => {
+  ballSearchQuery = e.target.value;
+  renderEquipScreen();
+});
+
 openSettingsBtn.addEventListener('click', openSettingsModal);
 settingsXBtn.addEventListener('click', closeSettingsModal);
 settingsCancelBtn.addEventListener('click', closeSettingsModal);
@@ -502,6 +732,7 @@ settingsSaveBtn.addEventListener('click', () => {
   }
   playSaveSound(draftVolume);
   profile = {
+    ...profile,
     username: draftUsername.trim(),
     pixels: [...draftPixels],
     volume: clampVolume(draftVolume),
