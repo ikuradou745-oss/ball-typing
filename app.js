@@ -1,4 +1,4 @@
-import { BALL_CATALOG, RARITY_STYLES } from './assets/ballImages.js';
+import { BALL_CATALOG, NPC_ENEMY_BALLS, RARITY_STYLES } from './assets/ballImages.js';
 
 const GRID_SIZE = 16;
 const TOTAL_PIXELS = GRID_SIZE * GRID_SIZE;
@@ -275,9 +275,16 @@ function renderAvatarCanvas(canvas, pixels) {
   }
 }
 
+const BATTLE_SPEEDS = [1, 2, 3];
+const BATTLE_WORD = { kana: 'あいうえお', romaji: 'aiueo' };
+
 // App State
 let profile = loadProfile();
 let currentScreen = 'home';
+let isMatchmaking = false;
+let battleSpeedIndex = 0;
+let typedIndex = 0;
+let typingErrorTimer = null;
 let ballSearchQuery = '';
 let equipFeedbackTimer = null;
 let draftVolume = profile.volume;
@@ -292,10 +299,26 @@ let isDrawing = false;
 let strokeSnapshot = null;
 
 // DOM Elements
+const topHudEl = document.querySelector('.top-hud');
 const homeScreenEl = document.getElementById('home-screen');
+const modeScreenEl = document.getElementById('mode-screen');
 const equipScreenEl = document.getElementById('equip-screen');
+const battleScreenEl = document.getElementById('battle-screen');
 const equipBackBtn = document.getElementById('equip-back-btn');
+const openPlayBtn = document.getElementById('open-play-btn');
 const openEquipBtn = document.getElementById('open-equip-btn');
+const modeVsBtn = document.getElementById('mode-vs-btn');
+const matchmakingOverlay = document.getElementById('matchmaking-overlay');
+
+const battleBackBtn = document.getElementById('battle-back-btn');
+const battleSpeedBtn = document.getElementById('battle-speed-btn');
+const battleTypingBox = document.getElementById('battle-typing-box');
+const typingKanaEl = document.getElementById('typing-kana');
+const typingRomajiEl = document.getElementById('typing-romaji');
+const mobileTypingInput = document.getElementById('mobile-typing-input');
+const enemyTerritoryEl = document.getElementById('enemy-territory');
+const playerTerritoryEl = document.getElementById('player-territory');
+
 const equipStatusMsg = document.getElementById('equip-status-msg');
 const equippedCountText = document.getElementById('equipped-count-text');
 const ownedCountText = document.getElementById('owned-count-text');
@@ -480,17 +503,162 @@ function renderEquipScreen() {
   });
 }
 
+function createBattleUnitElement(unit, isEnemy) {
+  const wrapper = document.createElement('div');
+  wrapper.className = `battle-unit ${isEnemy ? 'battle-unit-enemy' : 'battle-unit-player'}`;
+  wrapper.innerHTML = `
+    <img
+      src="${unit.imageSrc}"
+      alt="${unit.name}"
+      width="56"
+      height="56"
+      class="battle-unit-sprite pixelated"
+    />
+    <div class="battle-stat-plate">
+      <span class="battle-stat-lv">Lv.${unit.level}</span>
+      <span class="battle-stat-nums">
+        <span><span class="stat-heart">♥</span>${unit.hp}</span>
+        <span><span class="stat-sword">⚔</span>${unit.atk}</span>
+      </span>
+    </div>
+  `;
+  return wrapper;
+}
+
+function renderBattleUnits() {
+  enemyTerritoryEl.innerHTML = '';
+  NPC_ENEMY_BALLS.forEach((enemy) => {
+    enemyTerritoryEl.appendChild(createBattleUnitElement(enemy, true));
+  });
+
+  playerTerritoryEl.innerHTML = '';
+  profile.equippedBalls.forEach((ballId) => {
+    const ball = BALL_CATALOG[ballId];
+    if (!ball) return;
+    playerTerritoryEl.appendChild(createBattleUnitElement(ball, false));
+  });
+}
+
+function renderBattleSpeed() {
+  const speed = BATTLE_SPEEDS[battleSpeedIndex] || 1;
+  battleSpeedBtn.textContent = `${speed}倍速`;
+  battleScreenEl.style.setProperty('--battle-speed', String(speed));
+}
+
+function renderBattleTyping() {
+  typingKanaEl.textContent = BATTLE_WORD.kana;
+  typingRomajiEl.innerHTML = '';
+  for (let i = 0; i < BATTLE_WORD.romaji.length; i++) {
+    const span = document.createElement('span');
+    span.textContent = BATTLE_WORD.romaji[i];
+    if (i < typedIndex) {
+      span.className = 'typing-char-done';
+    } else if (i === typedIndex) {
+      span.className = 'typing-char-next';
+    } else {
+      span.className = 'typing-char-rest';
+    }
+    typingRomajiEl.appendChild(span);
+  }
+}
+
+function triggerPlayerLunge() {
+  const speed = BATTLE_SPEEDS[battleSpeedIndex] || 1;
+  const duration = Math.max(90, Math.round(220 / speed));
+  const units = Array.from(playerTerritoryEl.querySelectorAll('.battle-unit'));
+  units.forEach((unit) => {
+    unit.classList.remove('battle-unit-lunge');
+    void unit.offsetWidth;
+    unit.classList.add('battle-unit-lunge');
+    setTimeout(() => {
+      unit.classList.remove('battle-unit-lunge');
+    }, duration);
+  });
+}
+
+function handleTypingChar(rawChar) {
+  if (
+    currentScreen !== 'battle' ||
+    isMatchmaking ||
+    !noticeModal.classList.contains('hidden') ||
+    !settingsModal.classList.contains('hidden')
+  ) {
+    return;
+  }
+
+  const ch = rawChar.toLowerCase();
+  if (!/^[a-z]$/.test(ch)) return;
+
+  const expected = BATTLE_WORD.romaji[typedIndex];
+  if (ch === expected) {
+    typedIndex += 1;
+    if (typedIndex >= BATTLE_WORD.romaji.length) {
+      playSaveSound(profile.volume);
+      triggerPlayerLunge();
+      typedIndex = 0;
+    } else {
+      playClickSound(profile.volume);
+    }
+    battleTypingBox.classList.remove('typing-error-flash');
+    renderBattleTyping();
+  } else {
+    playErrorSound(profile.volume);
+    battleTypingBox.classList.add('typing-error-flash');
+    if (typingErrorTimer) clearTimeout(typingErrorTimer);
+    typingErrorTimer = setTimeout(() => {
+      battleTypingBox.classList.remove('typing-error-flash');
+    }, 180);
+  }
+}
+
+function startVsMatchmaking() {
+  if (isMatchmaking) return;
+  isMatchmaking = true;
+  playOpenSound(profile.volume);
+
+  matchmakingOverlay.classList.remove('hidden');
+  void matchmakingOverlay.offsetWidth;
+  matchmakingOverlay.classList.add('is-visible');
+
+  // Fade in (~220ms) -> prepare Battle Screen -> wait 0.5s -> fade out
+  setTimeout(() => {
+    setScreen('battle');
+    setTimeout(() => {
+      matchmakingOverlay.classList.remove('is-visible');
+      setTimeout(() => {
+        matchmakingOverlay.classList.add('hidden');
+        isMatchmaking = false;
+      }, 240);
+    }, 500);
+  }, 220);
+}
+
 function setScreen(screen) {
   currentScreen = screen;
+  const isHome = currentScreen === 'home';
+  const isMode = currentScreen === 'mode';
   const isEquip = currentScreen === 'equip';
-  homeScreenEl.classList.toggle('hidden', isEquip);
+  const isBattle = currentScreen === 'battle';
+
+  topHudEl.classList.toggle('hidden', isBattle);
+  homeScreenEl.classList.toggle('hidden', !isHome);
+  modeScreenEl.classList.toggle('hidden', !isMode);
   equipScreenEl.classList.toggle('hidden', !isEquip);
-  equipBackBtn.classList.toggle('hidden', !isEquip);
+  battleScreenEl.classList.toggle('hidden', !isBattle);
+  equipBackBtn.classList.toggle('hidden', isHome || isBattle);
+
   if (isEquip) {
     equipStatusMsg.classList.add('hidden');
     ballSearchQuery = '';
     ballSearchInput.value = '';
     renderEquipScreen();
+  }
+
+  if (isBattle) {
+    typedIndex = 0;
+    renderBattleSpeed();
+    renderBattleTyping();
+    renderBattleUnits();
   }
 }
 
@@ -705,6 +873,11 @@ document.querySelectorAll('[data-menu-btn]').forEach((btn) => {
   });
 });
 
+openPlayBtn.addEventListener('click', () => {
+  playOpenSound(profile.volume);
+  setScreen('mode');
+});
+
 openEquipBtn.addEventListener('click', () => {
   playOpenSound(profile.volume);
   setScreen('equip');
@@ -713,6 +886,47 @@ openEquipBtn.addEventListener('click', () => {
 equipBackBtn.addEventListener('click', () => {
   playClickSound(profile.volume);
   setScreen('home');
+});
+
+modeVsBtn.addEventListener('click', startVsMatchmaking);
+
+document.querySelectorAll('[data-dev-mode-btn]').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    playClickSound(profile.volume);
+  });
+});
+
+battleBackBtn.addEventListener('click', () => {
+  playClickSound(profile.volume);
+  setScreen('mode');
+});
+
+battleSpeedBtn.addEventListener('click', () => {
+  playClickSound(profile.volume);
+  battleSpeedIndex = (battleSpeedIndex + 1) % BATTLE_SPEEDS.length;
+  renderBattleSpeed();
+});
+
+battleTypingBox.addEventListener('click', () => {
+  mobileTypingInput.focus();
+});
+
+mobileTypingInput.addEventListener('input', (e) => {
+  const val = e.target.value;
+  if (val) {
+    for (const ch of val) {
+      handleTypingChar(ch);
+    }
+    e.target.value = '';
+  }
+});
+
+window.addEventListener('keydown', (e) => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (document.activeElement === mobileTypingInput) return;
+  if (e.key.length === 1) {
+    handleTypingChar(e.key);
+  }
 });
 
 ballSearchInput.addEventListener('input', (e) => {

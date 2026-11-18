@@ -23,6 +23,8 @@ export const BALL_CATALOG = {
     name: 'スポンジボール',
     rarity: 'common',
     level: 1,
+    hp: 10,
+    atk: 1.5,
     imageSrc: './png/sponge_ball.png',
     pixelRows: [
       '................',
@@ -44,3 +46,14 @@ export const BALL_CATALOG = {
     ],
   },
 };
+
+export const NPC_ENEMY_BALLS = [
+  {
+    id: 'rival_ball',
+    name: 'ライバルボール',
+    level: 1,
+    hp: 10,
+    atk: 1.4,
+    imageSrc: './png/enemy_ball.png',
+  },
+];

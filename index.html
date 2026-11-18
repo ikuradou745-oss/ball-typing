@@ -76,7 +76,7 @@
         </div>
 
         <nav class="menu-stack" aria-label="メインメニュー">
-          <button type="button" class="arcade-btn menu-btn menu-btn-play" data-menu-btn>
+          <button id="open-play-btn" type="button" class="arcade-btn menu-btn menu-btn-play">
             プレイ
           </button>
           <button type="button" class="arcade-btn menu-btn menu-btn-shop" data-menu-btn>
@@ -84,6 +84,30 @@
           </button>
           <button id="open-equip-btn" type="button" class="arcade-btn menu-btn menu-btn-equip">
             装備
+          </button>
+        </nav>
+      </main>
+
+      <!-- Mode Selection Screen -->
+      <main id="mode-screen" class="mode-stage hidden" aria-label="モード選択画面">
+        <div class="title-wrap">
+          <h1 class="mode-title arcade-outline-white">モード選択</h1>
+        </div>
+
+        <nav class="mode-stack" aria-label="ゲームモード">
+          <button id="mode-vs-btn" type="button" class="arcade-btn mode-btn mode-btn-vs">
+            <span class="mode-btn-main">対戦モード</span>
+            <span class="mode-btn-sub">NPCとバトル</span>
+          </button>
+
+          <button type="button" class="arcade-btn mode-btn mode-btn-dev" data-dev-mode-btn>
+            <span class="mode-btn-main">ストーリーモード</span>
+            <span class="mode-btn-sub">開発中</span>
+          </button>
+
+          <button type="button" class="arcade-btn mode-btn mode-btn-dev" data-dev-mode-btn>
+            <span class="mode-btn-main">エンドレスモード</span>
+            <span class="mode-btn-sub">開発中</span>
           </button>
         </nav>
       </main>
@@ -130,6 +154,72 @@
           </section>
         </div>
       </main>
+
+      <!-- Battle Screen -->
+      <main id="battle-screen" class="battle-screen hidden" aria-label="バトル画面">
+        <!-- Top White Bar: Back + Typing Prompt + Speed Toggle -->
+        <div class="battle-top-bar">
+          <div class="battle-top-left">
+            <button id="battle-back-btn" type="button" class="arcade-btn-sm battle-back-btn" aria-label="モード選択に戻る">
+              <svg viewBox="0 0 24 24" class="icon-svg-sm" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m15 18-6-6 6-6" />
+              </svg>
+              <span>戻る</span>
+            </button>
+          </div>
+
+          <div id="battle-typing-box" class="battle-typing-box" role="region" aria-label="タイピング単語">
+            <div id="typing-kana" class="typing-kana">あいうえお</div>
+            <div id="typing-romaji" class="typing-romaji" aria-live="polite"></div>
+            <input
+              id="mobile-typing-input"
+              type="text"
+              inputmode="latin"
+              autocomplete="off"
+              autocapitalize="off"
+              spellcheck="false"
+              aria-label="タイピング入力"
+              class="mobile-typing-input"
+            />
+          </div>
+
+          <div class="battle-top-right">
+            <button id="battle-speed-btn" type="button" class="arcade-btn-sm battle-speed-btn" aria-label="スピード切り替え">
+              1倍速
+            </button>
+          </div>
+        </div>
+
+        <!-- Sky + Territories -->
+        <div class="battle-arena">
+          <div class="battle-sky">
+            <!-- Horizon Decorative Blocks matching reference -->
+            <div class="battle-horizon-blocks" aria-hidden="true">
+              <span class="hblock hblock-blue"></span>
+              <span class="hblock hblock-purple"></span>
+              <span class="hblock hblock-green"></span>
+              <span class="hblock hblock-yellow"></span>
+            </div>
+
+            <div class="battle-territories">
+              <!-- Left: Enemy Territory -->
+              <section id="enemy-territory" class="territory-side territory-left" aria-label="敵の陣地"></section>
+              <!-- Right: Player Territory -->
+              <section id="player-territory" class="territory-side territory-right" aria-label="自分の陣地"></section>
+            </div>
+          </div>
+
+          <!-- Ground Asphalt Road -->
+          <div class="battle-ground" aria-hidden="true">
+            <div class="battle-road-dashes"></div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <!-- Matchmaking Fade Overlay -->
+    <div id="matchmaking-overlay" class="matchmaking-overlay hidden" role="status" aria-live="assertive">
+      <div class="matchmaking-text arcade-outline-white">相手を探しています</div>
     </div>
 
     <!-- Initial Notice Modal -->

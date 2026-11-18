@@ -283,6 +283,389 @@ body {
   color: #000000;
 }
 
+/* Mode Selection Screen */
+.mode-stage {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px 48px;
+}
+
+.mode-title {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+}
+
+.mode-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 320px;
+}
+
+.mode-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 70px;
+  width: 100%;
+  padding: 10px 20px;
+  border-radius: 14px;
+}
+
+.mode-btn-vs {
+  background-color: #f6c116;
+  color: #000000;
+}
+
+.mode-btn-dev {
+  background-color: #e2e8f0;
+  color: #475569;
+}
+
+.mode-btn-main {
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.mode-btn-sub {
+  font-size: 12px;
+  font-weight: 800;
+  opacity: 0.85;
+}
+
+/* Matchmaking Fade Overlay */
+.matchmaking-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background-color: #0f172a;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 220ms ease;
+}
+
+.matchmaking-overlay.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.matchmaking-text {
+  font-size: 28px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-align: center;
+}
+
+/* Battle Screen (Matching Reference Layout) */
+.battle-screen {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 100dvh;
+  width: 100%;
+}
+
+.battle-top-bar {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+  min-height: 112px;
+  padding: 12px 16px;
+  border-bottom: 3px solid #000000;
+  background-color: #ffffff;
+}
+
+.battle-top-left {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.battle-top-right {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  align-self: flex-start;
+}
+
+.battle-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 40px;
+  padding: 6px 12px 6px 8px;
+  border-radius: 10px;
+  background-color: #f8fafc;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.battle-speed-btn {
+  min-width: 74px;
+  min-height: 40px;
+  padding: 6px 14px;
+  border-radius: 10px;
+  background-color: #f6c116;
+  color: #000000;
+  font-size: 15px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.battle-typing-box {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px 12px;
+  text-align: center;
+  cursor: text;
+}
+
+.typing-kana {
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 1.25;
+  color: #111827;
+  letter-spacing: 0.06em;
+}
+
+.typing-romaji {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.08em;
+}
+
+.typing-char-done {
+  color: #16a34a;
+}
+
+.typing-char-next {
+  color: #0f172a;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-decoration-thickness: 3px;
+}
+
+.typing-char-rest {
+  color: #94a3b8;
+}
+
+.typing-error-flash .typing-char-next {
+  color: #dc2626;
+}
+
+.mobile-typing-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: transparent;
+  caret-color: transparent;
+  font-size: 16px;
+}
+
+.battle-arena {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.battle-sky {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 260px;
+  background-color: #89d1ee;
+  overflow: hidden;
+}
+
+.battle-horizon-blocks {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 110px;
+  pointer-events: none;
+}
+
+.hblock {
+  position: absolute;
+  bottom: 0;
+}
+
+.hblock-blue {
+  left: 10%;
+  width: 34px;
+  height: 36px;
+  background-color: #3196e2;
+}
+
+.hblock-purple {
+  left: 28.5%;
+  width: 44px;
+  height: 82px;
+  background-color: #9368b7;
+}
+
+.hblock-green {
+  left: 58%;
+  width: 36px;
+  height: 54px;
+  background-color: #4ade80;
+}
+
+.hblock-yellow {
+  right: 14%;
+  width: 50px;
+  height: 52px;
+  background-color: #f6c116;
+}
+
+.battle-territories {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: end;
+  gap: 16px;
+  width: 100%;
+  max-width: 1060px;
+  margin: 0 auto;
+  padding: 0 16px 26px;
+}
+
+.territory-side {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.territory-left {
+  justify-content: flex-end;
+  padding-right: 12px;
+}
+
+.territory-right {
+  justify-content: flex-start;
+  padding-left: 12px;
+}
+
+.battle-unit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  transition: transform calc(180ms / var(--battle-speed, 1)) cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.battle-unit-lunge {
+  transform: translateX(-14px) translateY(-6px);
+}
+
+.battle-unit-sprite {
+  display: block;
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+}
+
+.battle-unit-enemy .battle-unit-sprite {
+  transform: scaleX(-1);
+}
+
+.battle-stat-plate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 78px;
+  padding: 3px 7px 4px;
+  border: 2px solid #000000;
+  border-radius: 8px;
+  background-color: #ffffff;
+  color: #0f172a;
+}
+
+.battle-stat-lv {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1.1;
+  color: #dc2626;
+}
+
+.battle-stat-nums {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+  color: #0f172a;
+  white-space: nowrap;
+}
+
+.stat-heart {
+  color: #ef4444;
+}
+
+.stat-sword {
+  color: #475569;
+}
+
+.battle-ground {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 132px;
+  border-top: 3px solid #334155;
+  background-color: #7b8187;
+  overflow: hidden;
+}
+
+.battle-road-dashes {
+  width: 100%;
+  height: 6px;
+  background-image: repeating-linear-gradient(
+    to right,
+    #ffffff 0 26px,
+    transparent 26px 56px
+  );
+}
+
 /* Equip Screen Stage (Reference Mint Board + Pixel Ball Cards) */
 .equip-stage {
   position: relative;
@@ -1175,6 +1558,41 @@ body {
     padding: 24px;
   }
 
+  .mode-title {
+    font-size: 40px;
+  }
+
+  .matchmaking-text {
+    font-size: 36px;
+  }
+
+  .battle-top-bar {
+    min-height: 124px;
+    padding: 16px 24px;
+  }
+
+  .typing-kana {
+    font-size: 28px;
+  }
+
+  .typing-romaji {
+    font-size: 26px;
+  }
+
+  .battle-territories {
+    gap: 48px;
+    padding: 0 32px 30px;
+  }
+
+  .battle-unit-sprite {
+    width: 64px;
+    height: 64px;
+  }
+
+  .battle-stat-plate {
+    min-width: 86px;
+  }
+
   .modal-footer {
     padding: 14px 24px;
   }
@@ -1190,6 +1608,8 @@ body {
   .arcade-btn,
   .arcade-btn-sm,
   .ball-card,
+  .battle-unit,
+  .matchmaking-overlay,
   .color-swatch,
   .is-shaking {
     transition: none;
