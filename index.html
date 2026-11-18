@@ -115,6 +115,28 @@
       <!-- Equip Screen Stage -->
       <main id="equip-screen" class="equip-stage hidden" aria-label="装備画面">
         <div class="arcade-card equip-board">
+          <!-- Mode Toggle: 「装備モード」 vs 「説明モード」 -->
+          <div class="equip-mode-bar" role="tablist" aria-label="装備画面モード切り替え">
+            <button
+              id="equip-mode-equip-btn"
+              type="button"
+              role="tab"
+              aria-selected="true"
+              class="arcade-btn-sm equip-mode-btn equip-mode-btn-active-equip"
+            >
+              装備モード
+            </button>
+            <button
+              id="equip-mode-info-btn"
+              type="button"
+              role="tab"
+              aria-selected="false"
+              class="arcade-btn-sm equip-mode-btn"
+            >
+              説明モード
+            </button>
+          </div>
+
           <!-- Upper Section: Equipped Balls (Min 1 / Max 4) -->
           <section class="equip-section-top" aria-labelledby="equipped-section-title">
             <div class="equip-section-header">
@@ -124,7 +146,7 @@
                 </h2>
                 <span id="equipped-count-text" class="equip-count-text">1 / 4</span>
               </div>
-              <span class="equip-hint-text">タップして外す</span>
+              <span id="equip-top-hint" class="equip-hint-text">タップして外す</span>
             </div>
             <p id="equip-status-msg" class="equip-feedback hidden" role="status" aria-live="polite"></p>
             <div id="equipped-slots-grid" class="equipped-slots-row"></div>
@@ -137,7 +159,7 @@
                 <h2 id="owned-section-title" class="equip-section-title">持っているボール</h2>
                 <span id="owned-count-text" class="equip-count-text">1個</span>
               </div>
-              <span class="equip-hint-text">タップして装備</span>
+              <span id="equip-bottom-hint" class="equip-hint-text">タップして装備</span>
             </div>
 
             <div class="equip-search-wrap">
@@ -151,22 +173,27 @@
             </div>
 
             <div id="owned-balls-grid" class="owned-balls-row"></div>
+
+            <!-- Unowned Catalog Balls (Shown in 説明モード so players can inspect all character data) -->
+            <div id="equip-catalog-section" class="equip-catalog-section hidden">
+              <div class="equip-section-header equip-catalog-header">
+                <div class="equip-title-group">
+                  <h3 class="equip-section-subtitle">未所持のボール（キャラデータ）</h3>
+                  <span id="catalog-count-text" class="equip-count-text">1個</span>
+                </div>
+                <span class="equip-hint-text">タップして能力を見る</span>
+              </div>
+              <div id="catalog-balls-grid" class="owned-balls-row"></div>
+            </div>
           </section>
         </div>
       </main>
 
       <!-- Battle Screen -->
       <main id="battle-screen" class="battle-screen hidden" aria-label="バトル画面">
-        <!-- Top White Bar: Back + Typing Prompt + Speed Toggle -->
+        <!-- Top White Bar: Typing Prompt + Speed Toggle (No back button during battle) -->
         <div class="battle-top-bar">
-          <div class="battle-top-left">
-            <button id="battle-back-btn" type="button" class="arcade-btn-sm battle-back-btn" aria-label="モード選択に戻る">
-              <svg viewBox="0 0 24 24" class="icon-svg-sm" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                <path d="m15 18-6-6 6-6" />
-              </svg>
-              <span>戻る</span>
-            </button>
-          </div>
+          <div class="battle-top-left" aria-hidden="true"></div>
 
           <div id="battle-typing-box" class="battle-typing-box" role="region" aria-label="タイピング単語">
             <div id="typing-kana" class="typing-kana">あいうえお</div>
@@ -184,7 +211,12 @@
           </div>
 
           <div class="battle-top-right">
-            <button id="battle-speed-btn" type="button" class="arcade-btn-sm battle-speed-btn" aria-label="スピード切り替え">
+            <button
+              id="battle-speed-btn"
+              type="button"
+              class="arcade-btn-sm battle-speed-btn battle-speed-btn-1x"
+              aria-label="スピード切り替え"
+            >
               1倍速
             </button>
           </div>
@@ -449,6 +481,69 @@
           </button>
           <button id="settings-save-btn" type="button" class="arcade-btn btn-green">
             保存する
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Ball Detail Modal (説明モード) -->
+    <div
+      id="ball-detail-modal"
+      class="modal-backdrop hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="ball-detail-name"
+    >
+      <div class="arcade-card ball-detail-dialog">
+        <div class="modal-header modal-header-between">
+          <h2 id="ball-detail-name" class="modal-title arcade-outline-white">ボール詳細</h2>
+          <button
+            id="ball-detail-x-btn"
+            type="button"
+            class="arcade-btn-sm btn-close-x"
+            aria-label="閉じる"
+          >
+            <svg viewBox="0 0 24 24" class="icon-svg" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 6 6 18" />
+              <path d="m6 6 12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="ball-detail-body">
+          <div id="ball-detail-hero" class="ball-detail-hero">
+            <div id="ball-detail-sprite" class="ball-detail-sprite-wrap"></div>
+            <div class="ball-detail-badges">
+              <span id="ball-detail-rarity" class="ball-detail-tag">コモン</span>
+              <span id="ball-detail-level" class="ball-detail-tag ball-level-tag">Lv.1</span>
+              <span id="ball-detail-ownership" class="ball-detail-tag">所持中</span>
+            </div>
+          </div>
+
+          <div class="ball-detail-stats-grid">
+            <div class="ball-detail-stat-box">
+              <span class="ball-detail-stat-label">
+                <span class="stat-heart" aria-hidden="true">♥</span> HP
+              </span>
+              <span id="ball-detail-hp" class="ball-detail-stat-value">10</span>
+            </div>
+            <div class="ball-detail-stat-box">
+              <span class="ball-detail-stat-label">
+                <span class="stat-sword" aria-hidden="true">⚔</span> 攻撃力
+              </span>
+              <span id="ball-detail-atk" class="ball-detail-stat-value">1</span>
+            </div>
+          </div>
+
+          <div class="ball-detail-ability-box">
+            <div id="ball-detail-ability-title" class="ball-detail-ability-title">特殊能力</div>
+            <p id="ball-detail-ability-desc" class="ball-detail-ability-desc"></p>
+          </div>
+        </div>
+
+        <div class="modal-footer modal-footer-center">
+          <button id="ball-detail-close-btn" type="button" class="arcade-btn btn-gold btn-close-notice">
+            閉じる
           </button>
         </div>
       </div>

@@ -275,7 +275,7 @@ function renderAvatarCanvas(canvas, pixels) {
   }
 }
 
-const BATTLE_SPEEDS = [1, 2, 3];
+const BATTLE_SPEEDS = [1, 3];
 const BATTLE_WORD = { kana: 'あいうえお', romaji: 'aiueo' };
 
 // App State
@@ -285,6 +285,7 @@ let isMatchmaking = false;
 let battleSpeedIndex = 0;
 let typedIndex = 0;
 let typingErrorTimer = null;
+let equipMode = 'equip';
 let ballSearchQuery = '';
 let equipFeedbackTimer = null;
 let draftVolume = profile.volume;
@@ -310,7 +311,6 @@ const openEquipBtn = document.getElementById('open-equip-btn');
 const modeVsBtn = document.getElementById('mode-vs-btn');
 const matchmakingOverlay = document.getElementById('matchmaking-overlay');
 
-const battleBackBtn = document.getElementById('battle-back-btn');
 const battleSpeedBtn = document.getElementById('battle-speed-btn');
 const battleTypingBox = document.getElementById('battle-typing-box');
 const typingKanaEl = document.getElementById('typing-kana');
@@ -319,12 +319,33 @@ const mobileTypingInput = document.getElementById('mobile-typing-input');
 const enemyTerritoryEl = document.getElementById('enemy-territory');
 const playerTerritoryEl = document.getElementById('player-territory');
 
+const equipModeEquipBtn = document.getElementById('equip-mode-equip-btn');
+const equipModeInfoBtn = document.getElementById('equip-mode-info-btn');
+const equipTopHint = document.getElementById('equip-top-hint');
+const equipBottomHint = document.getElementById('equip-bottom-hint');
 const equipStatusMsg = document.getElementById('equip-status-msg');
 const equippedCountText = document.getElementById('equipped-count-text');
 const ownedCountText = document.getElementById('owned-count-text');
 const equippedSlotsGrid = document.getElementById('equipped-slots-grid');
 const ownedBallsGrid = document.getElementById('owned-balls-grid');
+const equipCatalogSection = document.getElementById('equip-catalog-section');
+const catalogCountText = document.getElementById('catalog-count-text');
+const catalogBallsGrid = document.getElementById('catalog-balls-grid');
 const ballSearchInput = document.getElementById('ball-search-input');
+
+const ballDetailModal = document.getElementById('ball-detail-modal');
+const ballDetailName = document.getElementById('ball-detail-name');
+const ballDetailXBtn = document.getElementById('ball-detail-x-btn');
+const ballDetailCloseBtn = document.getElementById('ball-detail-close-btn');
+const ballDetailHero = document.getElementById('ball-detail-hero');
+const ballDetailSprite = document.getElementById('ball-detail-sprite');
+const ballDetailRarity = document.getElementById('ball-detail-rarity');
+const ballDetailLevel = document.getElementById('ball-detail-level');
+const ballDetailOwnership = document.getElementById('ball-detail-ownership');
+const ballDetailHp = document.getElementById('ball-detail-hp');
+const ballDetailAtk = document.getElementById('ball-detail-atk');
+const ballDetailAbilityTitle = document.getElementById('ball-detail-ability-title');
+const ballDetailAbilityDesc = document.getElementById('ball-detail-ability-desc');
 
 const hudAvatarCanvas = document.getElementById('hud-avatar-canvas');
 const hudUsernameEl = document.getElementById('hud-username');
@@ -425,20 +446,50 @@ function createBallCardHTML(ball, footerLabel) {
         <span class="ball-tag ball-level-tag">Lv.${ball.level}</span>
       </span>
       <span class="ball-sprite-wrap">
-        <img
-          src="${ball.imageSrc}"
-          alt="${ball.name}"
-          width="48"
-          height="48"
-          class="ball-pixel-img pixelated"
-        />
+        ${ball.svg}
       </span>
       <span class="ball-nameplate">${footerLabel}</span>
     `,
   };
 }
 
+function openBallDetailModal(ball) {
+  playOpenSound(profile.volume);
+  const rarityInfo = RARITY_STYLES[ball.rarity] || RARITY_STYLES.common;
+  const isOwned = profile.ownedBalls.includes(ball.id);
+  const isEquipped = profile.equippedBalls.includes(ball.id);
+
+  ballDetailName.textContent = ball.name;
+  ballDetailHero.style.backgroundColor = rarityInfo.cardBg;
+  ballDetailSprite.innerHTML = ball.svg;
+  ballDetailRarity.textContent = rarityInfo.label;
+  ballDetailLevel.textContent = `Lv.${ball.level}`;
+  ballDetailOwnership.textContent = isEquipped ? '装備中' : isOwned ? '所持中' : '未所持';
+  ballDetailHp.textContent = String(ball.hp);
+  ballDetailAtk.textContent = String(ball.atk);
+  ballDetailAbilityTitle.textContent = ball.abilityTitle || '特殊能力';
+  ballDetailAbilityDesc.textContent = ball.ability || '特殊能力なし';
+
+  ballDetailModal.classList.remove('hidden');
+}
+
+function closeBallDetailModal() {
+  if (ballDetailModal.classList.contains('hidden')) return;
+  playClickSound(profile.volume);
+  ballDetailModal.classList.add('hidden');
+}
+
 function renderEquipScreen() {
+  const isInfoMode = equipMode === 'info';
+
+  equipModeEquipBtn.setAttribute('aria-selected', String(!isInfoMode));
+  equipModeInfoBtn.setAttribute('aria-selected', String(isInfoMode));
+  equipModeEquipBtn.classList.toggle('equip-mode-btn-active-equip', !isInfoMode);
+  equipModeInfoBtn.classList.toggle('equip-mode-btn-active-info', isInfoMode);
+
+  equipTopHint.textContent = isInfoMode ? 'タップして能力を見る' : 'タップして外す';
+  equipBottomHint.textContent = isInfoMode ? 'タップして能力を見る' : 'タップして装備';
+
   equippedCountText.textContent = `${profile.equippedBalls.length} / ${MAX_EQUIPPED_BALLS}`;
   ownedCountText.textContent = `${profile.ownedBalls.length}個`;
 
@@ -453,9 +504,20 @@ function renderEquipScreen() {
       slotBtn.type = 'button';
       slotBtn.className = 'ball-card';
       slotBtn.style.backgroundColor = card.bg;
-      slotBtn.setAttribute('aria-label', `${ball.name}（装備中・タップで外す）`);
+      slotBtn.setAttribute(
+        'aria-label',
+        isInfoMode
+          ? `${ball.name}（タップして性能・能力を見る）`
+          : `${ball.name}（装備中・タップで外す）`
+      );
       slotBtn.innerHTML = card.html;
-      slotBtn.addEventListener('click', () => toggleEquipBall(ball.id, slotBtn));
+      slotBtn.addEventListener('click', () => {
+        if (equipMode === 'info') {
+          openBallDetailModal(ball);
+        } else {
+          toggleEquipBall(ball.id, slotBtn);
+        }
+      });
       equippedSlotsGrid.appendChild(slotBtn);
     } else {
       const emptySlot = document.createElement('div');
@@ -478,42 +540,73 @@ function renderEquipScreen() {
   if (filteredOwned.length === 0) {
     const emptyMsg = document.createElement('p');
     emptyMsg.className = 'ball-empty-msg';
-    emptyMsg.textContent = `「${ballSearchQuery.trim()}」に一致するボールが見つかりませんでした`;
+    emptyMsg.textContent = `「${ballSearchQuery.trim()}」に一致する所持ボールが見つかりませんでした`;
     ownedBallsGrid.appendChild(emptyMsg);
-    return;
+  } else {
+    filteredOwned.forEach((ballId) => {
+      const ball = BALL_CATALOG[ballId];
+      if (!ball) return;
+      const isEquipped = profile.equippedBalls.includes(ballId);
+      const cardBtn = document.createElement('button');
+      const card = createBallCardHTML(ball, `${ball.name} ×1`);
+      cardBtn.type = 'button';
+      cardBtn.className = `ball-card ${isEquipped ? 'ball-card-equipped-highlight' : ''}`;
+      cardBtn.style.backgroundColor = card.bg;
+      cardBtn.setAttribute('aria-pressed', String(isEquipped));
+      cardBtn.setAttribute(
+        'aria-label',
+        isInfoMode
+          ? `${ball.name}（タップして性能・能力を見る）`
+          : `${ball.name}：${isEquipped ? '装備中（タップで外す）' : '未装備（タップで装備）'}`
+      );
+      cardBtn.innerHTML = card.html;
+      cardBtn.addEventListener('click', () => {
+        if (equipMode === 'info') {
+          openBallDetailModal(ball);
+        } else {
+          toggleEquipBall(ball.id, cardBtn);
+        }
+      });
+      ownedBallsGrid.appendChild(cardBtn);
+    });
   }
 
-  filteredOwned.forEach((ballId) => {
-    const ball = BALL_CATALOG[ballId];
-    if (!ball) return;
-    const isEquipped = profile.equippedBalls.includes(ballId);
-    const cardBtn = document.createElement('button');
-    const card = createBallCardHTML(ball, `${ball.name} ×1`);
-    cardBtn.type = 'button';
-    cardBtn.className = `ball-card ${isEquipped ? 'ball-card-equipped-highlight' : ''}`;
-    cardBtn.style.backgroundColor = card.bg;
-    cardBtn.setAttribute('aria-pressed', String(isEquipped));
-    cardBtn.setAttribute(
-      'aria-label',
-      `${ball.name}：${isEquipped ? '装備中（タップで外す）' : '未装備（タップで装備）'}`
-    );
-    cardBtn.innerHTML = card.html;
-    cardBtn.addEventListener('click', () => toggleEquipBall(ball.id, cardBtn));
-    ownedBallsGrid.appendChild(cardBtn);
+  // Unowned Catalog Section (Visible only in 説明モード so players can inspect all character data)
+  const ownedSet = new Set(profile.ownedBalls);
+  const unownedBalls = Object.values(BALL_CATALOG).filter((ball) => {
+    if (ownedSet.has(ball.id)) return false;
+    if (!query) return true;
+    return ball.name.toLowerCase().includes(query);
   });
+
+  if (isInfoMode && unownedBalls.length > 0) {
+    equipCatalogSection.classList.remove('hidden');
+    catalogCountText.textContent = `${unownedBalls.length}個`;
+    catalogBallsGrid.innerHTML = '';
+    unownedBalls.forEach((ball) => {
+      const cardBtn = document.createElement('button');
+      const card = createBallCardHTML(ball, ball.name);
+      cardBtn.type = 'button';
+      cardBtn.className = 'ball-card ball-card-unowned';
+      cardBtn.style.backgroundColor = card.bg;
+      cardBtn.setAttribute('aria-label', `${ball.name}（未所持・タップして性能・能力を見る）`);
+      cardBtn.innerHTML = card.html;
+      cardBtn.addEventListener('click', () => openBallDetailModal(ball));
+      catalogBallsGrid.appendChild(cardBtn);
+    });
+  } else {
+    equipCatalogSection.classList.add('hidden');
+    catalogBallsGrid.innerHTML = '';
+  }
 }
 
 function createBattleUnitElement(unit, isEnemy) {
   const wrapper = document.createElement('div');
   wrapper.className = `battle-unit ${isEnemy ? 'battle-unit-enemy' : 'battle-unit-player'}`;
   wrapper.innerHTML = `
-    <img
-      src="${unit.imageSrc}"
-      alt="${unit.name}"
-      width="56"
-      height="56"
-      class="battle-unit-sprite pixelated"
-    />
+    <div class="battle-unit-sprite-wrap" role="img" aria-label="${unit.name}">
+      ${unit.svg}
+    </div>
     <div class="battle-stat-plate">
       <span class="battle-stat-lv">Lv.${unit.level}</span>
       <span class="battle-stat-nums">
@@ -542,6 +635,8 @@ function renderBattleUnits() {
 function renderBattleSpeed() {
   const speed = BATTLE_SPEEDS[battleSpeedIndex] || 1;
   battleSpeedBtn.textContent = `${speed}倍速`;
+  battleSpeedBtn.classList.toggle('battle-speed-btn-1x', speed === 1);
+  battleSpeedBtn.classList.toggle('battle-speed-btn-3x', speed === 3);
   battleScreenEl.style.setProperty('--battle-speed', String(speed));
 }
 
@@ -581,7 +676,8 @@ function handleTypingChar(rawChar) {
     currentScreen !== 'battle' ||
     isMatchmaking ||
     !noticeModal.classList.contains('hidden') ||
-    !settingsModal.classList.contains('hidden')
+    !settingsModal.classList.contains('hidden') ||
+    !ballDetailModal.classList.contains('hidden')
   ) {
     return;
   }
@@ -648,6 +744,7 @@ function setScreen(screen) {
   equipBackBtn.classList.toggle('hidden', isHome || isBattle);
 
   if (isEquip) {
+    equipMode = 'equip';
     equipStatusMsg.classList.add('hidden');
     ballSearchQuery = '';
     ballSearchInput.value = '';
@@ -896,11 +993,6 @@ document.querySelectorAll('[data-dev-mode-btn]').forEach((btn) => {
   });
 });
 
-battleBackBtn.addEventListener('click', () => {
-  playClickSound(profile.volume);
-  setScreen('mode');
-});
-
 battleSpeedBtn.addEventListener('click', () => {
   playClickSound(profile.volume);
   battleSpeedIndex = (battleSpeedIndex + 1) % BATTLE_SPEEDS.length;
@@ -922,10 +1014,38 @@ mobileTypingInput.addEventListener('input', (e) => {
 });
 
 window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !ballDetailModal.classList.contains('hidden')) {
+    closeBallDetailModal();
+    return;
+  }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (document.activeElement === mobileTypingInput) return;
   if (e.key.length === 1) {
     handleTypingChar(e.key);
+  }
+});
+
+equipModeEquipBtn.addEventListener('click', () => {
+  if (equipMode === 'equip') return;
+  playClickSound(profile.volume);
+  equipMode = 'equip';
+  equipStatusMsg.classList.add('hidden');
+  renderEquipScreen();
+});
+
+equipModeInfoBtn.addEventListener('click', () => {
+  if (equipMode === 'info') return;
+  playClickSound(profile.volume);
+  equipMode = 'info';
+  equipStatusMsg.classList.add('hidden');
+  renderEquipScreen();
+});
+
+ballDetailXBtn.addEventListener('click', closeBallDetailModal);
+ballDetailCloseBtn.addEventListener('click', closeBallDetailModal);
+ballDetailModal.addEventListener('click', (e) => {
+  if (e.target === ballDetailModal) {
+    closeBallDetailModal();
   }
 });
 
