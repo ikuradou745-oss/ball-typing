@@ -1,0 +1,109 @@
+{
+  "entities": {
+    "Survey": {
+      "title": "Survey",
+      "description": "A user-submitted suggestion or feature request for Ball Typing.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the submitter.",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "authorName": {
+          "type": "string",
+          "description": "Display name entered by the player.",
+          "minLength": 1,
+          "maxLength": 20
+        },
+        "content": {
+          "type": "string",
+          "description": "Requested feature or feedback content.",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server-validated creation timestamp."
+        }
+      },
+      "required": ["uid", "authorName", "content", "createdAt"]
+    },
+    "SurveyQuota": {
+      "title": "SurveyQuota",
+      "description": "Per-user daily JST survey submission counter enforcing a strict limit of 3 per day.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID owning this quota record.",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "year": {
+          "type": "integer",
+          "description": "JST year of the last submission."
+        },
+        "month": {
+          "type": "integer",
+          "description": "JST month of the last submission."
+        },
+        "day": {
+          "type": "integer",
+          "description": "JST day of the last submission."
+        },
+        "count": {
+          "type": "integer",
+          "description": "Number of surveys submitted on this JST date (1 to 3)."
+        },
+        "lastSurveyId": {
+          "type": "string",
+          "description": "Document ID of the survey created in this atomic batch.",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of the latest submission."
+        }
+      },
+      "required": ["uid", "year", "month", "day", "count", "lastSurveyId", "updatedAt"]
+    },
+    "Admin": {
+      "title": "Admin",
+      "description": "Authorized administrator registry document.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the administrator.",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "description": "Administrator email address.",
+          "maxLength": 200
+        }
+      },
+      "required": ["uid"]
+    }
+  },
+  "firestore": {
+    "/surveys/{surveyId}": {
+      "schema": { "$ref": "#/entities/Survey" },
+      "description": "Feature request surveys submitted by authenticated players (readable only by admins)."
+    },
+    "/surveyQuotas/{userId}": {
+      "schema": { "$ref": "#/entities/SurveyQuota" },
+      "description": "Server-time-enforced daily quota tracker limiting each user to 3 surveys per JST day."
+    },
+    "/admins/{userId}": {
+      "schema": { "$ref": "#/entities/Admin" },
+      "description": "Admin role documents readable only by the owning admin or existing admins."
+    }
+  }
+}

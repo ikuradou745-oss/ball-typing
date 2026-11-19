@@ -1,0 +1,141 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net (Default-Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Primitive Helpers
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isVerifiedUser() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isVerifiedUser() && (
+        request.auth.token.email == 'ikuradou745@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function jstTime() {
+      return request.time + duration.value(9, 'h');
+    }
+
+    function isValidSurvey(data) {
+      return data.keys().hasAll(['uid', 'authorName', 'content', 'createdAt']) &&
+        data.keys().hasOnly(['uid', 'authorName', 'content', 'createdAt']) &&
+        isValidId(data.uid) &&
+        data.uid == request.auth.uid &&
+        data.authorName is string &&
+        data.authorName.size() >= 1 &&
+        data.authorName.size() <= 20 &&
+        data.content is string &&
+        data.content.size() >= 1 &&
+        data.content.size() <= 300 &&
+        data.createdAt is timestamp &&
+        data.createdAt == request.time;
+    }
+
+    function isValidSurveyQuota(data, userId) {
+      let jst = jstTime();
+      return data.keys().hasAll(['uid', 'year', 'month', 'day', 'count', 'lastSurveyId', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'year', 'month', 'day', 'count', 'lastSurveyId', 'updatedAt']) &&
+        isValidId(data.uid) &&
+        data.uid == userId &&
+        data.uid == request.auth.uid &&
+        data.year is int &&
+        data.month is int &&
+        data.day is int &&
+        data.year == jst.year() &&
+        data.month == jst.month() &&
+        data.day == jst.day() &&
+        data.count is int &&
+        data.count >= 1 &&
+        data.count <= 3 &&
+        isValidId(data.lastSurveyId) &&
+        data.updatedAt is timestamp &&
+        data.updatedAt == request.time;
+    }
+
+    function isSameJstDay(oldData) {
+      let jst = jstTime();
+      return oldData.year == jst.year() &&
+        oldData.month == jst.month() &&
+        oldData.day == jst.day();
+    }
+
+    function isQuotaBatchSynchronized(surveyId) {
+      let quotaAfter = getAfter(/databases/$(database)/documents/surveyQuotas/$(request.auth.uid)).data;
+      return quotaAfter.uid == request.auth.uid &&
+        quotaAfter.updatedAt == request.time &&
+        quotaAfter.lastSurveyId == surveyId &&
+        quotaAfter.count >= 1 &&
+        quotaAfter.count <= 3;
+    }
+
+    // Connection validation probe (get only for exact 'connection' doc)
+    match /test/{docId} {
+      allow get: if isValidId(docId) && docId == 'connection';
+      allow list, create, update, delete: if false;
+    }
+
+    // Admin registry (read-only by admins/self, managed via Firebase console)
+    match /admins/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list, create, update, delete: if false;
+    }
+
+    // Per-user daily JST survey quota (max 3 per day, 1 survey per increment)
+    match /surveyQuotas/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if false;
+      allow create: if isValidId(userId) &&
+        isOwner(userId) &&
+        isValidSurveyQuota(incoming(), userId) &&
+        incoming().count == 1;
+      allow update: if isValidId(userId) &&
+        isOwner(userId) &&
+        isValidSurveyQuota(incoming(), userId) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['year', 'month', 'day', 'count', 'lastSurveyId', 'updatedAt']) &&
+        incoming().uid == existing().uid &&
+        (
+          (isSameJstDay(existing()) && incoming().count == existing().count + 1 && incoming().count <= 3) ||
+          (!isSameJstDay(existing()) && incoming().count == 1)
+        );
+      allow delete: if false;
+    }
+
+    // Survey submissions: any verified user can create (1-to-1 coupled to daily quota), ONLY admin can read/list
+    match /surveys/{surveyId} {
+      allow get: if isValidId(surveyId) && isAdmin();
+      allow list: if isAdmin();
+      allow create: if isValidId(surveyId) &&
+        isVerifiedUser() &&
+        isValidSurvey(incoming()) &&
+        isQuotaBatchSynchronized(surveyId);
+      allow update: if false;
+      allow delete: if isValidId(surveyId) && isAdmin();
+    }
+  }
+}

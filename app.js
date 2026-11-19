@@ -4,6 +4,18 @@ import {
   getCatalogBallsByRarity,
   getNextRarity,
 } from './assets/ballImages.js';
+import {
+  SURVEY_CONTENT_MAX,
+  SURVEY_DAILY_LIMIT,
+  ensureFirebase,
+  fetchAdminSurveys,
+  getTodaySurveyQuota,
+  signInWithGoogle,
+  signOutUser,
+  submitSurveyFeedback,
+  subscribeAuth,
+  verifyAdminCodeOnServer,
+} from './firebaseClient.js';
 
 const GRID_SIZE = 16;
 const TOTAL_PIXELS = GRID_SIZE * GRID_SIZE;
@@ -455,9 +467,17 @@ let currentTool = 'pen';
 let mirrorX = false;
 let isDrawing = false;
 let strokeSnapshot = null;
+let firebaseUser = null;
+let surveyQuota = { used: 0, remaining: SURVEY_DAILY_LIMIT, limit: SURVEY_DAILY_LIMIT };
+let adminSessionToken = null;
+let surveySubView = 'form';
+let isSurveyBusy = false;
 
 // DOM Elements
 const topHudEl = document.querySelector('.top-hud');
+const homeTopLeftActions = document.getElementById('home-top-left-actions');
+const openEnemyGuideBtn = document.getElementById('open-enemy-guide-btn');
+const openSurveyBtn = document.getElementById('open-survey-btn');
 const homeScreenEl = document.getElementById('home-screen');
 const modeScreenEl = document.getElementById('mode-screen');
 const equipScreenEl = document.getElementById('equip-screen');
@@ -551,6 +571,34 @@ const pixelGridEl = document.getElementById('pixel-grid');
 const freeColorInput = document.getElementById('free-color-input');
 const freeColorHex = document.getElementById('free-color-hex');
 const colorSwatchesEl = document.getElementById('color-swatches');
+
+const enemyGuideModal = document.getElementById('enemy-guide-modal');
+const enemyGuideXBtn = document.getElementById('enemy-guide-x-btn');
+const enemyGuideCloseBtn = document.getElementById('enemy-guide-close-btn');
+
+const surveyModal = document.getElementById('survey-modal');
+const surveyXBtn = document.getElementById('survey-x-btn');
+const surveyAuthStatus = document.getElementById('survey-auth-status');
+const surveyQuotaBadge = document.getElementById('survey-quota-badge');
+const surveyLoginBtn = document.getElementById('survey-login-btn');
+const surveyLogoutBtn = document.getElementById('survey-logout-btn');
+const surveyForm = document.getElementById('survey-form');
+const surveyNameInput = document.getElementById('survey-name-input');
+const surveyContentInput = document.getElementById('survey-content-input');
+const surveyContentCounter = document.getElementById('survey-content-counter');
+const surveyFeedbackMsg = document.getElementById('survey-feedback-msg');
+const surveySubmitBtn = document.getElementById('survey-submit-btn');
+const openAdminSurveyBtn = document.getElementById('open-admin-survey-btn');
+const adminCodePanel = document.getElementById('admin-code-panel');
+const adminCodeInput = document.getElementById('admin-code-input');
+const adminCodeError = document.getElementById('admin-code-error');
+const adminBackFromCodeBtn = document.getElementById('admin-back-from-code-btn');
+const adminCodeSubmitBtn = document.getElementById('admin-code-submit-btn');
+const adminListPanel = document.getElementById('admin-list-panel');
+const adminRefreshBtn = document.getElementById('admin-refresh-btn');
+const adminListStatus = document.getElementById('admin-list-status');
+const adminSurveyList = document.getElementById('admin-survey-list');
+const adminBackFromListBtn = document.getElementById('admin-back-from-list-btn');
 
 const pixelCells = [];
 const swatchButtons = [];
@@ -1381,7 +1429,9 @@ function handleTypingChar(rawChar) {
     !noticeModal.classList.contains('hidden') ||
     !settingsModal.classList.contains('hidden') ||
     !ballDetailModal.classList.contains('hidden') ||
-    !battleResultModal.classList.contains('hidden')
+    !battleResultModal.classList.contains('hidden') ||
+    !enemyGuideModal.classList.contains('hidden') ||
+    !surveyModal.classList.contains('hidden')
   ) {
     return;
   }
@@ -1462,6 +1512,7 @@ function setScreen(screen) {
   }
 
   topHudEl.classList.toggle('hidden', isBattle);
+  homeTopLeftActions.classList.toggle('hidden', !isHome);
   homeScreenEl.classList.toggle('hidden', !isHome);
   modeScreenEl.classList.toggle('hidden', !isMode);
   equipScreenEl.classList.toggle('hidden', !isEquip);
@@ -1740,9 +1791,19 @@ mobileTypingInput.addEventListener('input', (e) => {
 });
 
 window.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && !ballDetailModal.classList.contains('hidden')) {
-    closeBallDetailModal();
-    return;
+  if (e.key === 'Escape') {
+    if (!enemyGuideModal.classList.contains('hidden')) {
+      closeEnemyGuideModal();
+      return;
+    }
+    if (!surveyModal.classList.contains('hidden')) {
+      closeSurveyModal();
+      return;
+    }
+    if (!ballDetailModal.classList.contains('hidden')) {
+      closeBallDetailModal();
+      return;
+    }
   }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (document.activeElement === mobileTypingInput) return;
@@ -1908,6 +1969,358 @@ function finishStroke() {
 window.addEventListener('pointerup', finishStroke);
 window.addEventListener('pointercancel', finishStroke);
 
+// Enemy Guide Modal (❓)
+function openEnemyGuideModal() {
+  playOpenSound(profile.volume);
+  enemyGuideModal.classList.remove('hidden');
+}
+
+function closeEnemyGuideModal() {
+  if (enemyGuideModal.classList.contains('hidden')) return;
+  playClickSound(profile.volume);
+  enemyGuideModal.classList.add('hidden');
+}
+
+openEnemyGuideBtn.addEventListener('click', openEnemyGuideModal);
+enemyGuideXBtn.addEventListener('click', closeEnemyGuideModal);
+enemyGuideCloseBtn.addEventListener('click', closeEnemyGuideModal);
+enemyGuideModal.addEventListener('click', (e) => {
+  if (e.target === enemyGuideModal) closeEnemyGuideModal();
+});
+
+// Survey & Admin Modal
+function setSurveyFeedback(msg, isError) {
+  if (!msg) {
+    surveyFeedbackMsg.textContent = '';
+    surveyFeedbackMsg.classList.add('hidden');
+    surveyFeedbackMsg.classList.remove('survey-feedback-error');
+    return;
+  }
+  surveyFeedbackMsg.textContent = msg;
+  surveyFeedbackMsg.classList.toggle('survey-feedback-error', Boolean(isError));
+  surveyFeedbackMsg.classList.remove('hidden');
+}
+
+function setAdminCodeError(msg) {
+  if (!msg) {
+    adminCodeError.textContent = '';
+    adminCodeError.classList.add('hidden');
+    return;
+  }
+  adminCodeError.textContent = msg;
+  adminCodeError.classList.remove('hidden');
+}
+
+function renderSurveyView() {
+  surveyForm.classList.toggle('hidden', surveySubView !== 'form');
+  adminCodePanel.classList.toggle('hidden', surveySubView !== 'admin-code');
+  adminListPanel.classList.toggle('hidden', surveySubView !== 'admin-list');
+
+  const len = surveyContentInput.value.length;
+  surveyContentCounter.textContent = `${len} / ${SURVEY_CONTENT_MAX}文字`;
+
+  if (firebaseUser) {
+    const label = firebaseUser.displayName || firebaseUser.email || 'ログイン済み';
+    surveyAuthStatus.textContent = `ログイン中: ${label}`;
+    surveyLoginBtn.classList.add('hidden');
+    surveyLogoutBtn.classList.remove('hidden');
+    surveyQuotaBadge.textContent = `本日残り ${surveyQuota.remaining} / ${surveyQuota.limit}回`;
+    surveyQuotaBadge.classList.remove('hidden');
+    surveySubmitBtn.disabled = isSurveyBusy || surveyQuota.remaining <= 0;
+  } else {
+    surveyAuthStatus.textContent = 'Googleアカウント未ログイン';
+    surveyLoginBtn.classList.remove('hidden');
+    surveyLogoutBtn.classList.add('hidden');
+    surveyQuotaBadge.classList.add('hidden');
+    surveySubmitBtn.disabled = isSurveyBusy;
+  }
+}
+
+async function refreshQuotaForUser() {
+  if (!firebaseUser) {
+    surveyQuota = { used: 0, remaining: SURVEY_DAILY_LIMIT, limit: SURVEY_DAILY_LIMIT };
+    renderSurveyView();
+    return;
+  }
+  try {
+    surveyQuota = await getTodaySurveyQuota(firebaseUser.uid);
+  } catch {
+    surveyQuota = { used: 0, remaining: SURVEY_DAILY_LIMIT, limit: SURVEY_DAILY_LIMIT };
+  }
+  renderSurveyView();
+}
+
+async function openSurveyModal() {
+  playOpenSound(profile.volume);
+  surveySubView = 'form';
+  setSurveyFeedback('', false);
+  setAdminCodeError('');
+  if (!surveyNameInput.value.trim()) {
+    surveyNameInput.value = profile.username;
+  }
+  surveyModal.classList.remove('hidden');
+  renderSurveyView();
+  try {
+    await ensureFirebase();
+    await refreshQuotaForUser();
+  } catch (err) {
+    setSurveyFeedback(err instanceof Error ? err.message : 'Firebaseの初期化に失敗しました。', true);
+  }
+}
+
+function closeSurveyModal() {
+  if (surveyModal.classList.contains('hidden')) return;
+  playClickSound(profile.volume);
+  adminSessionToken = null;
+  adminCodeInput.value = '';
+  adminSurveyList.innerHTML = '';
+  surveySubView = 'form';
+  surveyModal.classList.add('hidden');
+}
+
+function formatSurveyDate(dateObj) {
+  if (!dateObj) return '';
+  try {
+    return new Intl.DateTimeFormat('ja-JP', {
+      timeZone: 'Asia/Tokyo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(dateObj);
+  } catch {
+    return '';
+  }
+}
+
+async function loadAndRenderAdminSurveys() {
+  if (!adminSessionToken) return;
+  adminRefreshBtn.disabled = true;
+  adminListStatus.textContent = '読み込み中...';
+  adminListStatus.classList.remove('survey-feedback-error', 'hidden');
+  adminSurveyList.innerHTML = '';
+
+  try {
+    const items = await fetchAdminSurveys(adminSessionToken);
+    if (items.length === 0) {
+      adminListStatus.textContent = 'まだアンケートは届いていません。';
+    } else {
+      adminListStatus.classList.add('hidden');
+      items.forEach((item) => {
+        const li = document.createElement('li');
+        li.className = 'admin-survey-item';
+
+        const line = document.createElement('div');
+        line.className = 'admin-survey-line';
+        line.textContent = `${item.authorName}：${item.content}`;
+        li.appendChild(line);
+
+        const timeText = formatSurveyDate(item.createdAt);
+        if (timeText) {
+          const timeEl = document.createElement('div');
+          timeEl.className = 'admin-survey-time';
+          timeEl.textContent = timeText;
+          li.appendChild(timeEl);
+        }
+
+        adminSurveyList.appendChild(li);
+      });
+    }
+  } catch (err) {
+    if (err && err.sessionExpired) {
+      adminSessionToken = null;
+      surveySubView = 'admin-code';
+      renderSurveyView();
+      setAdminCodeError(err.message);
+      return;
+    }
+    const isPermDenied =
+      err &&
+      (err.originalCode === 'permission-denied' ||
+        (err.message && err.message.includes('Missing or insufficient permissions')));
+    adminListStatus.textContent = isPermDenied
+      ? '管理者アカウントでログインしている場合のみ閲覧できます。'
+      : err instanceof Error
+        ? err.message
+        : 'アンケートの読み込みに失敗しました。';
+    adminListStatus.classList.add('survey-feedback-error');
+    adminListStatus.classList.remove('hidden');
+  } finally {
+    adminRefreshBtn.disabled = false;
+  }
+}
+
+openSurveyBtn.addEventListener('click', openSurveyModal);
+surveyXBtn.addEventListener('click', closeSurveyModal);
+surveyModal.addEventListener('click', (e) => {
+  if (e.target === surveyModal) closeSurveyModal();
+});
+
+surveyContentInput.addEventListener('input', () => {
+  const len = surveyContentInput.value.length;
+  surveyContentCounter.textContent = `${len} / ${SURVEY_CONTENT_MAX}文字`;
+});
+
+surveyLoginBtn.addEventListener('click', async () => {
+  playClickSound(profile.volume);
+  setSurveyFeedback('', false);
+  setAdminCodeError('');
+  try {
+    firebaseUser = await signInWithGoogle();
+    await refreshQuotaForUser();
+  } catch (err) {
+    setSurveyFeedback(
+      err instanceof Error ? `ログインに失敗しました: ${err.message}` : 'ログインに失敗しました。',
+      true
+    );
+  }
+});
+
+surveyLogoutBtn.addEventListener('click', async () => {
+  playClickSound(profile.volume);
+  adminSessionToken = null;
+  await signOutUser();
+  firebaseUser = null;
+  surveySubView = 'form';
+  setSurveyFeedback('', false);
+  await refreshQuotaForUser();
+});
+
+surveyForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (isSurveyBusy) return;
+  if (!firebaseUser) {
+    playErrorSound(profile.volume);
+    setSurveyFeedback('先に「Googleでログイン」ボタンを押してログインしてください。', true);
+    return;
+  }
+  const authorName = surveyNameInput.value.trim();
+  const content = surveyContentInput.value.trim();
+  if (!authorName) {
+    playErrorSound(profile.volume);
+    setSurveyFeedback('名前を入力してください。', true);
+    return;
+  }
+  if (!content) {
+    playErrorSound(profile.volume);
+    setSurveyFeedback('追加して欲しい内容を入力してください。', true);
+    return;
+  }
+
+  isSurveyBusy = true;
+  setSurveyFeedback('', false);
+  renderSurveyView();
+  try {
+    surveyQuota = await submitSurveyFeedback({ authorName, content });
+    playSaveSound(profile.volume);
+    surveyContentInput.value = '';
+    setSurveyFeedback(
+      `アンケートを送信しました！ありがとうございます（本日残り ${surveyQuota.remaining} / ${surveyQuota.limit}回）`,
+      false
+    );
+  } catch (err) {
+    playErrorSound(profile.volume);
+    const isPermDenied =
+      err &&
+      (err.originalCode === 'permission-denied' ||
+        (err.message && err.message.includes('Missing or insufficient permissions')));
+    setSurveyFeedback(
+      isPermDenied
+        ? '本日の送信上限（1日3回まで）に達したか、送信権限がありません。'
+        : err instanceof Error
+          ? err.message
+          : '送信に失敗しました。',
+      true
+    );
+  } finally {
+    isSurveyBusy = false;
+    await refreshQuotaForUser();
+  }
+});
+
+openAdminSurveyBtn.addEventListener('click', () => {
+  playClickSound(profile.volume);
+  setSurveyFeedback('', false);
+  if (!firebaseUser) {
+    playErrorSound(profile.volume);
+    setSurveyFeedback('管理者確認には先に「Googleでログイン」が必要です。', true);
+    return;
+  }
+  if (adminSessionToken) {
+    surveySubView = 'admin-list';
+    renderSurveyView();
+    loadAndRenderAdminSurveys();
+    return;
+  }
+  adminCodeInput.value = '';
+  setAdminCodeError('');
+  surveySubView = 'admin-code';
+  renderSurveyView();
+  adminCodeInput.focus();
+});
+
+adminBackFromCodeBtn.addEventListener('click', () => {
+  playClickSound(profile.volume);
+  adminCodeInput.value = '';
+  setAdminCodeError('');
+  surveySubView = 'form';
+  renderSurveyView();
+});
+
+async function handleAdminCodeSubmit() {
+  const code = adminCodeInput.value.trim();
+  if (!code) {
+    playErrorSound(profile.volume);
+    setAdminCodeError('管理者コードを入力してください。');
+    return;
+  }
+  adminCodeSubmitBtn.disabled = true;
+  setAdminCodeError('');
+  try {
+    const token = await verifyAdminCodeOnServer(code);
+    adminSessionToken = token;
+    adminCodeInput.value = '';
+    playOpenSound(profile.volume);
+    surveySubView = 'admin-list';
+    renderSurveyView();
+    await loadAndRenderAdminSurveys();
+  } catch (err) {
+    playErrorSound(profile.volume);
+    setAdminCodeError(err instanceof Error ? err.message : 'コードの確認に失敗しました。');
+  } finally {
+    adminCodeSubmitBtn.disabled = false;
+  }
+}
+
+adminCodeSubmitBtn.addEventListener('click', handleAdminCodeSubmit);
+adminCodeInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    handleAdminCodeSubmit();
+  }
+});
+
+adminRefreshBtn.addEventListener('click', () => {
+  playClickSound(profile.volume);
+  loadAndRenderAdminSurveys();
+});
+
+adminBackFromListBtn.addEventListener('click', () => {
+  playClickSound(profile.volume);
+  surveySubView = 'form';
+  renderSurveyView();
+});
+
 // Initialize
 buildEditorDOM();
 renderHud();
+subscribeAuth((user) => {
+  firebaseUser = user || null;
+  if (!user) {
+    adminSessionToken = null;
+  }
+  if (!surveyModal.classList.contains('hidden')) {
+    refreshQuotaForUser();
+  }
+}).catch(() => {});

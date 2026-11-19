@@ -30,6 +30,33 @@
     <div class="app-shell">
       <!-- Top HUD Bar: Back Button (Equip screen) + Unified Profile & Settings Button (Top-Right) -->
       <header class="top-hud">
+        <div id="home-top-left-actions" class="hud-left-actions">
+          <button
+            id="open-enemy-guide-btn"
+            type="button"
+            class="arcade-btn-sm hud-question-btn"
+            aria-label="敵のボールの仕組みを見る"
+            title="敵のボールの仕組み"
+          >
+            <span aria-hidden="true">❓</span>
+          </button>
+          <button
+            id="open-survey-btn"
+            type="button"
+            class="arcade-btn-sm hud-survey-btn"
+            aria-label="アンケートを開く"
+            title="アンケート"
+          >
+            <svg viewBox="0 0 24 24" class="icon-svg-sm" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
+              <rect x="9" y="3" width="6" height="4" rx="1" />
+              <path d="M9 12h6" />
+              <path d="M9 16h4" />
+            </svg>
+            <span>アンケート</span>
+          </button>
+        </div>
+
         <button
           id="equip-back-btn"
           type="button"
@@ -578,6 +605,202 @@
           <button id="battle-result-home-btn" type="button" class="arcade-btn btn-white battle-result-btn">
             ホームに戻る
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Enemy Ball Mechanics Guide Modal (❓) -->
+    <div
+      id="enemy-guide-modal"
+      class="modal-backdrop hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="enemy-guide-title"
+    >
+      <div class="arcade-card enemy-guide-dialog">
+        <div class="modal-header modal-header-between">
+          <h2 id="enemy-guide-title" class="modal-title arcade-outline-white">敵のボールの仕組み</h2>
+          <button
+            id="enemy-guide-x-btn"
+            type="button"
+            class="arcade-btn-sm btn-close-x"
+            aria-label="閉じる"
+          >
+            <svg viewBox="0 0 24 24" class="icon-svg" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 6 6 18" />
+              <path d="m6 6 12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="enemy-guide-body">
+          <div class="guide-card">
+            <h3 class="guide-card-title">1. 敵の数と基本レアリティ</h3>
+            <p class="guide-card-text">
+              バトルでは<strong>自分が装備しているボールの数（1〜4体）</strong>と同じ数だけ敵のボールが登場します。基本的には自分のボールと<strong>同じレアリティ</strong>から選ばれます。
+            </p>
+          </div>
+
+          <div class="guide-card guide-card-accent">
+            <h3 class="guide-card-title">2. レアリティ昇格の仕組み</h3>
+            <p class="guide-card-text">
+              同じレアリティのボールを<strong>合計6個以上</strong>持っていると、敵がその枠で<strong>1つ上のレアリティ</strong>に昇格して登場するチャンスが発生します！
+            </p>
+            <ul class="guide-rate-list">
+              <li>
+                <span class="guide-rate-badge guide-rate-common">コモン 6個以上</span>
+                <span>→ <strong>10%</strong> でアンコモンが出現</span>
+              </li>
+              <li>
+                <span class="guide-rate-badge guide-rate-uncommon">アンコモン 6個以上</span>
+                <span>→ <strong>5%</strong> で次レアリティが出現（上がるごとに確率は半分）</span>
+              </li>
+            </ul>
+          </div>
+
+          <div class="guide-card">
+            <h3 class="guide-card-title">3. バトル勝利で仲間を増やそう</h3>
+            <p class="guide-card-text">
+              勝利すると、敵チームにいたボールから<strong>好きな1体</strong>を選んで獲得できます。まずはコモンを6個集めてアンコモン出現を目指そう！
+            </p>
+          </div>
+        </div>
+
+        <div class="modal-footer modal-footer-center">
+          <button id="enemy-guide-close-btn" type="button" class="arcade-btn btn-gold btn-close-notice">
+            閉じる
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Survey & Admin Modal -->
+    <div
+      id="survey-modal"
+      class="modal-backdrop hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="survey-modal-title"
+    >
+      <div class="arcade-card survey-dialog">
+        <div class="modal-header modal-header-between">
+          <h2 id="survey-modal-title" class="modal-title arcade-outline-white">アンケート</h2>
+          <button
+            id="survey-x-btn"
+            type="button"
+            class="arcade-btn-sm btn-close-x"
+            aria-label="閉じる"
+          >
+            <svg viewBox="0 0 24 24" class="icon-svg" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 6 6 18" />
+              <path d="m6 6 12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="survey-body">
+          <!-- Firebase Auth Status Bar -->
+          <div class="survey-auth-bar">
+            <div class="survey-auth-info">
+              <span id="survey-auth-status" class="survey-auth-status">Googleアカウント確認中...</span>
+              <span id="survey-quota-badge" class="survey-quota-badge hidden">本日残り 3 / 3回</span>
+            </div>
+            <div class="survey-auth-actions">
+              <button id="survey-login-btn" type="button" class="arcade-btn-sm survey-login-btn hidden">
+                Googleでログイン
+              </button>
+              <button id="survey-logout-btn" type="button" class="arcade-btn-sm survey-logout-btn hidden">
+                ログアウト
+              </button>
+            </div>
+          </div>
+
+          <!-- View 1: Survey Submission Form -->
+          <form id="survey-form" class="survey-form" novalidate>
+            <p class="survey-intro">
+              ゲームに追加して欲しいボールや機能を送れます（1日3回まで）
+            </p>
+
+            <div class="survey-field">
+              <label for="survey-name-input" class="field-label">名前</label>
+              <input
+                id="survey-name-input"
+                type="text"
+                maxlength="20"
+                placeholder="名前を入力（最大20文字）"
+                class="text-input"
+              />
+            </div>
+
+            <div class="survey-field">
+              <div class="field-header">
+                <label for="survey-content-input" class="field-label">内容（追加して欲しいこと）</label>
+                <span id="survey-content-counter" class="field-counter">0 / 300文字</span>
+              </div>
+              <textarea
+                id="survey-content-input"
+                rows="4"
+                maxlength="300"
+                placeholder="例：新しいレアボールや機能を追加してほしい！"
+                class="survey-textarea"
+              ></textarea>
+            </div>
+
+            <p id="survey-feedback-msg" class="survey-feedback hidden" role="status" aria-live="polite"></p>
+
+            <div class="survey-actions-row">
+              <button id="survey-submit-btn" type="submit" class="arcade-btn btn-green survey-submit-btn">
+                送信する
+              </button>
+              <button id="open-admin-survey-btn" type="button" class="arcade-btn btn-white survey-admin-entry-btn">
+                アンケートを見る
+              </button>
+            </div>
+          </form>
+
+          <!-- View 2: Admin Passcode Entry -->
+          <div id="admin-code-panel" class="admin-panel hidden">
+            <h3 class="admin-panel-title">管理者確認</h3>
+            <p class="admin-panel-desc">
+              アンケート一覧は管理者のみ閲覧できます。管理者コードを入力してください。
+            </p>
+            <div class="survey-field">
+              <label for="admin-code-input" class="field-label">管理者コード</label>
+              <input
+                id="admin-code-input"
+                type="password"
+                autocomplete="off"
+                placeholder="コードを入力"
+                class="text-input"
+              />
+            </div>
+            <p id="admin-code-error" class="survey-feedback survey-feedback-error hidden" role="alert"></p>
+            <div class="survey-actions-row">
+              <button id="admin-back-from-code-btn" type="button" class="arcade-btn btn-white">
+                戻る
+              </button>
+              <button id="admin-code-submit-btn" type="button" class="arcade-btn btn-gold">
+                確認する
+              </button>
+            </div>
+          </div>
+
+          <!-- View 3: Admin Survey List -->
+          <div id="admin-list-panel" class="admin-panel hidden">
+            <div class="admin-list-header">
+              <h3 class="admin-panel-title">届いたアンケート一覧</h3>
+              <button id="admin-refresh-btn" type="button" class="arcade-btn-sm mini-btn">
+                更新
+              </button>
+            </div>
+            <p id="admin-list-status" class="survey-feedback hidden" role="status"></p>
+            <ul id="admin-survey-list" class="admin-survey-list"></ul>
+            <div class="survey-actions-row">
+              <button id="admin-back-from-list-btn" type="button" class="arcade-btn btn-white">
+                送信画面に戻る
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
