@@ -41,6 +41,15 @@
             <span aria-hidden="true">❓</span>
           </button>
           <button
+            id="open-admin-crown-btn"
+            type="button"
+            class="arcade-btn-sm hud-crown-btn"
+            aria-label="管理者認証を開く"
+            title="管理者認証"
+          >
+            <span aria-hidden="true">👑</span>
+          </button>
+          <button
             id="open-survey-btn"
             type="button"
             class="arcade-btn-sm hud-survey-btn"
@@ -86,7 +95,20 @@
               role="img"
             ></canvas>
           </span>
-          <span id="hud-username" class="hud-username">プレイヤー1</span>
+          <span class="hud-name-wrap">
+            <span id="hud-username" class="hud-username">プレイヤー1</span>
+            <span
+              id="hud-verified-badge"
+              class="verified-badge hidden"
+              title="管理者認証済み"
+              aria-label="管理者認証済み"
+            >
+              <svg viewBox="0 0 24 24" class="verified-badge-svg" aria-hidden="true">
+                <circle cx="12" cy="12" r="10" fill="#38BDF8" stroke="#000000" stroke-width="2.2" />
+                <path d="M7.5 12.2 10.6 15.3 16.8 9.1" fill="none" stroke="#FFFFFF" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </span>
+          </span>
           <span class="hud-gear-badge" aria-hidden="true">
             <svg viewBox="0 0 24 24" class="icon-svg" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
@@ -412,7 +434,20 @@
                     ></canvas>
                   </div>
                   <div class="preview-meta">
-                    <div id="preview-username" class="preview-username">プレイヤー1</div>
+                    <div class="preview-name-row">
+                      <div id="preview-username" class="preview-username">プレイヤー1</div>
+                      <span
+                        id="preview-verified-badge"
+                        class="verified-badge hidden"
+                        title="管理者認証済み"
+                        aria-label="管理者認証済み"
+                      >
+                        <svg viewBox="0 0 24 24" class="verified-badge-svg" aria-hidden="true">
+                          <circle cx="12" cy="12" r="10" fill="#38BDF8" stroke="#000000" stroke-width="2.2" />
+                          <path d="M7.5 12.2 10.6 15.3 16.8 9.1" fill="none" stroke="#FFFFFF" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                      </span>
+                    </div>
                     <div class="preview-sub">16×16 ICON</div>
                   </div>
                 </div>
@@ -699,39 +734,14 @@
         </div>
 
         <div class="survey-body">
-          <!-- Firebase Auth Status Bar -->
+          <!-- Quota Status Bar (No Google login required) -->
           <div class="survey-auth-bar">
-            <div class="survey-auth-info">
-              <span id="survey-auth-status" class="survey-auth-status">Googleアカウント確認中...</span>
-              <span id="survey-quota-badge" class="survey-quota-badge hidden">本日残り 3 / 3回</span>
-            </div>
-            <div class="survey-auth-actions">
-              <button id="survey-login-btn" type="button" class="arcade-btn-sm survey-login-btn hidden">
-                Googleでログイン
-              </button>
-              <button id="survey-logout-btn" type="button" class="arcade-btn-sm survey-logout-btn hidden">
-                ログアウト
-              </button>
-            </div>
+            <span class="survey-auth-status">追加してほしい機能やボールを送れます</span>
+            <span id="survey-quota-badge" class="survey-quota-badge">本日残り 3 / 3回</span>
           </div>
 
-          <!-- View 1: Survey Submission Form -->
+          <!-- View 1: Survey Submission Form (Name comes from Settings) -->
           <form id="survey-form" class="survey-form" novalidate>
-            <p class="survey-intro">
-              ゲームに追加して欲しいボールや機能を送れます（1日3回まで）
-            </p>
-
-            <div class="survey-field">
-              <label for="survey-name-input" class="field-label">名前</label>
-              <input
-                id="survey-name-input"
-                type="text"
-                maxlength="20"
-                placeholder="名前を入力（最大20文字）"
-                class="text-input"
-              />
-            </div>
-
             <div class="survey-field">
               <div class="field-header">
                 <label for="survey-content-input" class="field-label">内容（追加して欲しいこと）</label>
@@ -758,34 +768,7 @@
             </div>
           </form>
 
-          <!-- View 2: Admin Passcode Entry -->
-          <div id="admin-code-panel" class="admin-panel hidden">
-            <h3 class="admin-panel-title">管理者確認</h3>
-            <p class="admin-panel-desc">
-              アンケート一覧は管理者のみ閲覧できます。管理者コードを入力してください。
-            </p>
-            <div class="survey-field">
-              <label for="admin-code-input" class="field-label">管理者コード</label>
-              <input
-                id="admin-code-input"
-                type="password"
-                autocomplete="off"
-                placeholder="コードを入力"
-                class="text-input"
-              />
-            </div>
-            <p id="admin-code-error" class="survey-feedback survey-feedback-error hidden" role="alert"></p>
-            <div class="survey-actions-row">
-              <button id="admin-back-from-code-btn" type="button" class="arcade-btn btn-white">
-                戻る
-              </button>
-              <button id="admin-code-submit-btn" type="button" class="arcade-btn btn-gold">
-                確認する
-              </button>
-            </div>
-          </div>
-
-          <!-- View 3: Admin Survey List -->
+          <!-- View 2: Admin Survey List -->
           <div id="admin-list-panel" class="admin-panel hidden">
             <div class="admin-list-header">
               <h3 class="admin-panel-title">届いたアンケート一覧</h3>
@@ -798,6 +781,82 @@
             <div class="survey-actions-row">
               <button id="admin-back-from-list-btn" type="button" class="arcade-btn btn-white">
                 送信画面に戻る
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Admin Crown Auth Modal (👑) -->
+    <div
+      id="admin-crown-modal"
+      class="modal-backdrop hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="admin-crown-title"
+    >
+      <div class="arcade-card admin-crown-dialog">
+        <div class="modal-header modal-header-between">
+          <h2 id="admin-crown-title" class="modal-title arcade-outline-white">管理者認証</h2>
+          <button
+            id="admin-crown-x-btn"
+            type="button"
+            class="arcade-btn-sm btn-close-x"
+            aria-label="閉じる"
+          >
+            <svg viewBox="0 0 24 24" class="icon-svg" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 6 6 18" />
+              <path d="m6 6 12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="survey-body">
+          <div id="crown-unverified-view" class="admin-panel">
+            <p class="admin-panel-desc">
+              コードを入力してください。認証されると名前の横に認証マークがつきます。
+            </p>
+            <div class="survey-field">
+              <label for="crown-code-input" class="field-label">コードを入力</label>
+              <input
+                id="crown-code-input"
+                type="password"
+                autocomplete="off"
+                placeholder="コードを入力"
+                class="text-input"
+              />
+            </div>
+            <p id="crown-code-error" class="survey-feedback survey-feedback-error hidden" role="alert"></p>
+            <div class="survey-actions-row">
+              <button id="crown-cancel-btn" type="button" class="arcade-btn btn-white">
+                閉じる
+              </button>
+              <button id="crown-code-submit-btn" type="button" class="arcade-btn btn-gold">
+                認証する
+              </button>
+            </div>
+          </div>
+
+          <div id="crown-verified-view" class="admin-panel hidden">
+            <div class="crown-verified-banner">
+              <span class="verified-badge" aria-hidden="true">
+                <svg viewBox="0 0 24 24" class="verified-badge-svg">
+                  <circle cx="12" cy="12" r="10" fill="#38BDF8" stroke="#000000" stroke-width="2.2" />
+                  <path d="M7.5 12.2 10.6 15.3 16.8 9.1" fill="none" stroke="#FFFFFF" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </span>
+              <span>管理者認証が付与されています</span>
+            </div>
+            <p class="admin-panel-desc">
+              名前の横に認証マークが表示され、アンケート一覧を閲覧できます。
+            </p>
+            <div class="survey-actions-row">
+              <button id="crown-logout-btn" type="button" class="arcade-btn btn-white">
+                認証を解除する
+              </button>
+              <button id="crown-done-btn" type="button" class="arcade-btn btn-gold">
+                閉じる
               </button>
             </div>
           </div>
