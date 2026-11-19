@@ -78,7 +78,7 @@ export const BALL_CATALOG = {
     hp: 10,
     atk: 1,
     abilityTitle: '特殊能力',
-    ability: '攻撃を3回受けたらHPが最大HPの半分回復（最大10回復）します。',
+    ability: '1度だけ死亡したとき、HPを最大HPの半分にして復活する。',
     svg: createSpongeBallSvg(),
   },
   rubber_ball: {
@@ -93,6 +93,11 @@ export const BALL_CATALOG = {
     svg: createRubberBallSvg(),
   },
 };
+
+export function getCatalogBallsByRarity(rarity) {
+  const list = Object.values(BALL_CATALOG).filter((ball) => ball.rarity === rarity);
+  return list.length > 0 ? list : Object.values(BALL_CATALOG);
+}
 
 export const NPC_ENEMY_BALLS = [
   {

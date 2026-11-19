@@ -196,7 +196,11 @@
           <div class="battle-top-left" aria-hidden="true"></div>
 
           <div id="battle-typing-box" class="battle-typing-box" role="region" aria-label="タイピング単語">
-            <div id="typing-kana" class="typing-kana">あいうえお</div>
+            <div class="battle-hud-strip">
+              <span id="battle-turn-badge" class="battle-turn-badge">あなたのターン</span>
+              <span id="typing-combo-badge" class="typing-combo-badge">攻撃倍率 ×1.0</span>
+            </div>
+            <div id="typing-kana" class="typing-kana"></div>
             <div id="typing-romaji" class="typing-romaji" aria-live="polite"></div>
             <input
               id="mobile-typing-input"
@@ -232,6 +236,8 @@
               <span class="hblock hblock-green"></span>
               <span class="hblock hblock-yellow"></span>
             </div>
+
+            <div id="battle-fx-layer" class="battle-fx-layer" aria-hidden="true"></div>
 
             <div class="battle-territories">
               <!-- Left: Enemy Territory -->
@@ -544,6 +550,45 @@
         <div class="modal-footer modal-footer-center">
           <button id="ball-detail-close-btn" type="button" class="arcade-btn btn-gold btn-close-notice">
             閉じる
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Battle Result & Reward Modal -->
+    <div
+      id="battle-result-modal"
+      class="modal-backdrop hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="battle-result-title"
+    >
+      <div class="arcade-card battle-result-dialog">
+        <div id="battle-result-header" class="modal-header battle-result-header-win">
+          <h2 id="battle-result-title" class="modal-title arcade-outline-white">勝利！</h2>
+        </div>
+
+        <div class="battle-result-body">
+          <p id="battle-result-summary" class="battle-result-summary"></p>
+
+          <div id="battle-reward-section" class="battle-reward-section hidden">
+            <p class="battle-reward-prompt">
+              相手チームからボールを1つ選んで受け取ろう！
+            </p>
+            <div id="battle-reward-grid" class="battle-reward-grid"></div>
+            <p id="battle-reward-claimed-msg" class="battle-reward-claimed hidden" role="status" aria-live="polite"></p>
+          </div>
+        </div>
+
+        <div id="battle-result-footer" class="modal-footer modal-footer-center">
+          <button id="battle-retry-btn" type="button" class="arcade-btn btn-gold battle-result-btn">
+            もう一度戦う
+          </button>
+          <button id="battle-result-equip-btn" type="button" class="arcade-btn btn-green battle-result-btn hidden">
+            装備画面へ
+          </button>
+          <button id="battle-result-home-btn" type="button" class="arcade-btn btn-white battle-result-btn">
+            ホームに戻る
           </button>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { BALL_CATALOG, NPC_ENEMY_BALLS, RARITY_STYLES } from './assets/ballImages.js';
+import { BALL_CATALOG, RARITY_STYLES, getCatalogBallsByRarity } from './assets/ballImages.js';
 
 const GRID_SIZE = 16;
 const TOTAL_PIXELS = GRID_SIZE * GRID_SIZE;
@@ -98,16 +98,34 @@ function normalizeOwnedBalls(owned) {
   return Array.from(new Set(valid));
 }
 
-function normalizeEquippedBalls(equipped, ownedBalls) {
+function normalizeBallCounts(rawCounts, ownedBalls) {
+  const result = {};
+  ownedBalls.forEach((id) => {
+    const n = rawCounts && typeof rawCounts[id] === 'number' ? Math.floor(rawCounts[id]) : 1;
+    result[id] = Math.max(1, n);
+  });
+  return result;
+}
+
+function normalizeEquippedBalls(equipped, ownedBalls, ballCounts) {
   const ownedSet = new Set(ownedBalls);
-  const valid = Array.isArray(equipped)
-    ? Array.from(new Set(equipped.filter((id) => typeof id === 'string' && ownedSet.has(id))))
-    : [];
-  const capped = valid.slice(0, MAX_EQUIPPED_BALLS);
-  if (capped.length < MIN_EQUIPPED_BALLS) {
+  const used = {};
+  const valid = [];
+  if (Array.isArray(equipped)) {
+    for (const id of equipped) {
+      if (typeof id !== 'string' || !ownedSet.has(id)) continue;
+      const limit = ballCounts[id] || 1;
+      const current = used[id] || 0;
+      if (current < limit && valid.length < MAX_EQUIPPED_BALLS) {
+        valid.push(id);
+        used[id] = current + 1;
+      }
+    }
+  }
+  if (valid.length < MIN_EQUIPPED_BALLS) {
     return [ownedBalls[0] || DEFAULT_BALL_ID];
   }
-  return capped;
+  return valid;
 }
 
 function loadProfile() {
@@ -119,6 +137,7 @@ function loadProfile() {
         pixels: createDefaultPixels(),
         volume: DEFAULT_VOLUME,
         ownedBalls: [DEFAULT_BALL_ID],
+        ballCounts: { [DEFAULT_BALL_ID]: 1 },
         equippedBalls: [DEFAULT_BALL_ID],
       };
     }
@@ -136,14 +155,16 @@ function loadProfile() {
     const volume =
       typeof parsed.volume === 'number' ? clampVolume(parsed.volume) : DEFAULT_VOLUME;
     const ownedBalls = normalizeOwnedBalls(parsed.ownedBalls);
-    const equippedBalls = normalizeEquippedBalls(parsed.equippedBalls, ownedBalls);
-    return { username, pixels, volume, ownedBalls, equippedBalls };
+    const ballCounts = normalizeBallCounts(parsed.ballCounts, ownedBalls);
+    const equippedBalls = normalizeEquippedBalls(parsed.equippedBalls, ownedBalls, ballCounts);
+    return { username, pixels, volume, ownedBalls, ballCounts, equippedBalls };
   } catch {
     return {
       username: DEFAULT_USERNAME,
       pixels: createDefaultPixels(),
       volume: DEFAULT_VOLUME,
       ownedBalls: [DEFAULT_BALL_ID],
+      ballCounts: { [DEFAULT_BALL_ID]: 1 },
       equippedBalls: [DEFAULT_BALL_ID],
     };
   }
@@ -263,6 +284,100 @@ function playErrorSound(vol) {
   }
 }
 
+function playAttackHitSound(vol, isStrong) {
+  try {
+    const scale = clampVolume(vol) / 100;
+    if (scale <= 0) return;
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = isStrong ? 'square' : 'triangle';
+    osc.frequency.setValueAtTime(isStrong ? 380 : 280, now);
+    osc.frequency.exponentialRampToValueAtTime(95, now + 0.11);
+    gain.gain.setValueAtTime((isStrong ? 0.13 : 0.1) * scale, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.13);
+  } catch {
+    // Optional audio
+  }
+}
+
+function playHealSound(vol) {
+  try {
+    const scale = clampVolume(vol) / 100;
+    if (scale <= 0) return;
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    [523.25, 659.25].forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now + idx * 0.06);
+      gain.gain.setValueAtTime(0.09 * scale, now + idx * 0.06);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.06 + 0.14);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + idx * 0.06);
+      osc.stop(now + idx * 0.06 + 0.15);
+    });
+  } catch {
+    // Optional audio
+  }
+}
+
+function playKnockoutSound(vol) {
+  try {
+    const scale = clampVolume(vol) / 100;
+    if (scale <= 0) return;
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(240, now);
+    osc.frequency.exponentialRampToValueAtTime(70, now + 0.22);
+    gain.gain.setValueAtTime(0.11 * scale, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.23);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.24);
+  } catch {
+    // Optional audio
+  }
+}
+
+function playVictoryFanfare(vol) {
+  try {
+    const scale = clampVolume(vol) / 100;
+    if (scale <= 0) return;
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    [523.25, 659.25, 783.99, 1046.5].forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, now + idx * 0.07);
+      gain.gain.setValueAtTime(0.1 * scale, now + idx * 0.07);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.07 + 0.18);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + idx * 0.07);
+      osc.stop(now + idx * 0.07 + 0.19);
+    });
+  } catch {
+    // Optional audio
+  }
+}
+
 function renderAvatarCanvas(canvas, pixels) {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
@@ -276,14 +391,50 @@ function renderAvatarCanvas(canvas, pixels) {
 }
 
 const BATTLE_SPEEDS = [1, 3];
-const BATTLE_WORD = { kana: 'あいうえお', romaji: 'aiueo' };
+const TYPING_WORDS = [
+  { kana: 'あきらめずにがんばろう', romaji: 'akiramezuniganbarou' },
+  { kana: 'きょうもぜんりょくしょうぶ', romaji: 'kyoumozenryokusyoubu' },
+  { kana: 'きょうもげんきにはしる', romaji: 'kyoumogenkinihasiru' },
+  { kana: 'あついばとるがはじまる', romaji: 'atuibatorugahazimaru' },
+  { kana: 'しょうりをつかみとろう', romaji: 'syouriwotukamitorou' },
+  { kana: 'つよいぼーるをあつめよう', romaji: 'tuyoibo-ruwoatumeyou' },
+  { kana: 'たいぴんぐがはやくなる', romaji: 'taipingugahayakunaru' },
+  { kana: 'きみのゆびさきがひかる', romaji: 'kiminoyubisakigahikaru' },
+  { kana: 'さいごまであきらめない', romaji: 'saigomadeakiramenai' },
+  { kana: 'きらめくみらいへすすめ', romaji: 'kiramekumiraihesusume' },
+  { kana: 'ぼーるとともにたびだとう', romaji: 'bo-rutotomonitabidatou' },
+  { kana: 'さいきょうのぼーるめざす', romaji: 'saikyounobo-rumezasu' },
+  { kana: 'すぴーどあっぷでかつぞ', romaji: 'supi-doappudekatuzo' },
+  { kana: 'めざせたいぴんぐますたー', romaji: 'mezasetaipingumasuta-' },
+  { kana: 'れんぞくこうげきをきめろ', romaji: 'renzokukougekiwokimero' },
+];
+
+function roundStat(num) {
+  return Math.round(num * 100) / 100;
+}
+
+function formatStat(num) {
+  return String(roundStat(num));
+}
+
+function getPerfectMultiplier(streak) {
+  return Math.min(5, Math.round((1 + streak * 0.2) * 10) / 10);
+}
+
+function pickNextWord(prevRomaji) {
+  const candidates = prevRomaji
+    ? TYPING_WORDS.filter((w) => w.romaji !== prevRomaji)
+    : TYPING_WORDS;
+  return candidates[Math.floor(Math.random() * candidates.length)] || TYPING_WORDS[0];
+}
 
 // App State
 let profile = loadProfile();
 let currentScreen = 'home';
 let isMatchmaking = false;
 let battleSpeedIndex = 0;
-let typedIndex = 0;
+let battleSessionCounter = 0;
+let battleState = null;
 let typingErrorTimer = null;
 let equipMode = 'equip';
 let ballSearchQuery = '';
@@ -313,11 +464,25 @@ const matchmakingOverlay = document.getElementById('matchmaking-overlay');
 
 const battleSpeedBtn = document.getElementById('battle-speed-btn');
 const battleTypingBox = document.getElementById('battle-typing-box');
+const battleTurnBadge = document.getElementById('battle-turn-badge');
+const typingComboBadge = document.getElementById('typing-combo-badge');
 const typingKanaEl = document.getElementById('typing-kana');
 const typingRomajiEl = document.getElementById('typing-romaji');
 const mobileTypingInput = document.getElementById('mobile-typing-input');
+const battleFxLayer = document.getElementById('battle-fx-layer');
 const enemyTerritoryEl = document.getElementById('enemy-territory');
 const playerTerritoryEl = document.getElementById('player-territory');
+
+const battleResultModal = document.getElementById('battle-result-modal');
+const battleResultHeader = document.getElementById('battle-result-header');
+const battleResultTitle = document.getElementById('battle-result-title');
+const battleResultSummary = document.getElementById('battle-result-summary');
+const battleRewardSection = document.getElementById('battle-reward-section');
+const battleRewardGrid = document.getElementById('battle-reward-grid');
+const battleRewardClaimedMsg = document.getElementById('battle-reward-claimed-msg');
+const battleRetryBtn = document.getElementById('battle-retry-btn');
+const battleResultEquipBtn = document.getElementById('battle-result-equip-btn');
+const battleResultHomeBtn = document.getElementById('battle-result-home-btn');
 
 const equipModeEquipBtn = document.getElementById('equip-mode-equip-btn');
 const equipModeInfoBtn = document.getElementById('equip-mode-info-btn');
@@ -409,18 +574,27 @@ function triggerShake(el) {
   el.classList.add('is-shaking');
 }
 
+function unequipBallAtSlot(slotIndex, triggerEl) {
+  if (profile.equippedBalls.length <= MIN_EQUIPPED_BALLS) {
+    playErrorSound(profile.volume);
+    triggerShake(triggerEl);
+    showEquipFeedback('最低1つはボールを装備する必要があります');
+    return;
+  }
+  playClickSound(profile.volume);
+  const next = [...profile.equippedBalls];
+  next.splice(slotIndex, 1);
+  profile.equippedBalls = next;
+  equipStatusMsg.classList.add('hidden');
+  saveProfile(profile);
+  renderEquipScreen();
+}
+
 function toggleEquipBall(ballId, triggerEl) {
-  const isEquipped = profile.equippedBalls.includes(ballId);
-  if (isEquipped) {
-    if (profile.equippedBalls.length <= MIN_EQUIPPED_BALLS) {
-      playErrorSound(profile.volume);
-      triggerShake(triggerEl);
-      showEquipFeedback('最低1つはボールを装備する必要があります');
-      return;
-    }
-    playClickSound(profile.volume);
-    profile.equippedBalls = profile.equippedBalls.filter((id) => id !== ballId);
-  } else {
+  const ownedCount = profile.ballCounts[ballId] || 1;
+  const equippedCount = profile.equippedBalls.filter((id) => id === ballId).length;
+
+  if (equippedCount < ownedCount) {
     if (profile.equippedBalls.length >= MAX_EQUIPPED_BALLS) {
       playErrorSound(profile.volume);
       triggerShake(triggerEl);
@@ -429,6 +603,20 @@ function toggleEquipBall(ballId, triggerEl) {
     }
     playOpenSound(profile.volume);
     profile.equippedBalls = [...profile.equippedBalls, ballId];
+  } else {
+    if (profile.equippedBalls.length <= MIN_EQUIPPED_BALLS) {
+      playErrorSound(profile.volume);
+      triggerShake(triggerEl);
+      showEquipFeedback('最低1つはボールを装備する必要があります');
+      return;
+    }
+    playClickSound(profile.volume);
+    const removeIdx = profile.equippedBalls.lastIndexOf(ballId);
+    if (removeIdx !== -1) {
+      const next = [...profile.equippedBalls];
+      next.splice(removeIdx, 1);
+      profile.equippedBalls = next;
+    }
   }
 
   equipStatusMsg.classList.add('hidden');
@@ -490,8 +678,12 @@ function renderEquipScreen() {
   equipTopHint.textContent = isInfoMode ? 'タップして能力を見る' : 'タップして外す';
   equipBottomHint.textContent = isInfoMode ? 'タップして能力を見る' : 'タップして装備';
 
+  const totalOwnedCount = profile.ownedBalls.reduce(
+    (sum, id) => sum + (profile.ballCounts[id] || 1),
+    0
+  );
   equippedCountText.textContent = `${profile.equippedBalls.length} / ${MAX_EQUIPPED_BALLS}`;
-  ownedCountText.textContent = `${profile.ownedBalls.length}個`;
+  ownedCountText.textContent = `${totalOwnedCount}個`;
 
   // Upper: Equipped Balls (up to 4 slots)
   equippedSlotsGrid.innerHTML = '';
@@ -515,7 +707,7 @@ function renderEquipScreen() {
         if (equipMode === 'info') {
           openBallDetailModal(ball);
         } else {
-          toggleEquipBall(ball.id, slotBtn);
+          unequipBallAtSlot(slotIndex, slotBtn);
         }
       });
       equippedSlotsGrid.appendChild(slotBtn);
@@ -546,9 +738,10 @@ function renderEquipScreen() {
     filteredOwned.forEach((ballId) => {
       const ball = BALL_CATALOG[ballId];
       if (!ball) return;
+      const ownedCount = profile.ballCounts[ballId] || 1;
       const isEquipped = profile.equippedBalls.includes(ballId);
       const cardBtn = document.createElement('button');
-      const card = createBallCardHTML(ball, `${ball.name} ×1`);
+      const card = createBallCardHTML(ball, `${ball.name} ×${ownedCount}`);
       cardBtn.type = 'button';
       cardBtn.className = `ball-card ${isEquipped ? 'ball-card-equipped-highlight' : ''}`;
       cardBtn.style.backgroundColor = card.bg;
@@ -557,7 +750,7 @@ function renderEquipScreen() {
         'aria-label',
         isInfoMode
           ? `${ball.name}（タップして性能・能力を見る）`
-          : `${ball.name}：${isEquipped ? '装備中（タップで外す）' : '未装備（タップで装備）'}`
+          : `${ball.name}（所持${ownedCount}個）：${isEquipped ? '装備中' : '未装備'}`
       );
       cardBtn.innerHTML = card.html;
       cardBtn.addEventListener('click', () => {
@@ -600,18 +793,92 @@ function renderEquipScreen() {
   }
 }
 
-function createBattleUnitElement(unit, isEnemy) {
+function getBattleSpeed() {
+  return BATTLE_SPEEDS[battleSpeedIndex] || 1;
+}
+
+function battleDelay(baseMs) {
+  const speed = getBattleSpeed();
+  return new Promise((resolve) => {
+    setTimeout(resolve, Math.max(40, Math.round(baseMs / speed)));
+  });
+}
+
+function createUnitInstance(ball, uid) {
+  return {
+    uid,
+    ballId: ball.id,
+    name: ball.name,
+    rarity: ball.rarity,
+    level: ball.level,
+    maxHp: ball.hp,
+    hp: ball.hp,
+    atk: ball.atk,
+    svg: ball.svg,
+    revived: false,
+    attacksMade: 0,
+    dead: false,
+  };
+}
+
+function initBattleState() {
+  battleSessionCounter += 1;
+  const playerTeam = profile.equippedBalls.map((ballId, idx) => {
+    const ball = BALL_CATALOG[ballId] || BALL_CATALOG[DEFAULT_BALL_ID];
+    return createUnitInstance(ball, `p_${idx}`);
+  });
+
+  const enemyTeam = playerTeam.map((playerUnit, idx) => {
+    const sameRarityBalls = getCatalogBallsByRarity(playerUnit.rarity);
+    const picked = sameRarityBalls[Math.floor(Math.random() * sameRarityBalls.length)];
+    return createUnitInstance(picked, `e_${idx}`);
+  });
+
+  battleState = {
+    sessionId: battleSessionCounter,
+    playerTeam,
+    enemyTeam,
+    currentWord: pickNextWord(null),
+    typedIndex: 0,
+    wordHasMistake: false,
+    perfectStreak: 0,
+    perfectWordsCount: 0,
+    wordsCompleted: 0,
+    maxMultiplierReached: 1,
+    turn: 'player',
+    isResolvingTurn: false,
+    rewardClaimed: false,
+  };
+}
+
+function createBattleUnitElement(unit, isEnemy, isFrontLiving) {
   const wrapper = document.createElement('div');
-  wrapper.className = `battle-unit ${isEnemy ? 'battle-unit-enemy' : 'battle-unit-player'}`;
+  wrapper.dataset.uid = unit.uid;
+  wrapper.className = [
+    'battle-unit',
+    isEnemy ? 'battle-unit-enemy' : 'battle-unit-player',
+    unit.dead ? 'battle-unit-dead' : '',
+    isFrontLiving ? 'battle-unit-active' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  const hpPct = Math.max(0, Math.min(100, (unit.hp / unit.maxHp) * 100));
+  const statusTag = unit.dead ? '撃破' : isFrontLiving ? '先頭' : '';
+
   wrapper.innerHTML = `
+    ${statusTag ? `<span class="battle-unit-front-tag">${statusTag}</span>` : ''}
     <div class="battle-unit-sprite-wrap" role="img" aria-label="${unit.name}">
       ${unit.svg}
     </div>
     <div class="battle-stat-plate">
+      <div class="battle-hp-bar-track" aria-hidden="true">
+        <div class="battle-hp-bar-fill ${hpPct <= 35 ? 'battle-hp-bar-fill-low' : ''}" style="width: ${hpPct}%"></div>
+      </div>
       <span class="battle-stat-lv">Lv.${unit.level}</span>
       <span class="battle-stat-nums">
-        <span><span class="stat-heart">♥</span>${unit.hp}</span>
-        <span><span class="stat-sword">⚔</span>${unit.atk}</span>
+        <span><span class="stat-heart">♥</span>${formatStat(unit.hp)}</span>
+        <span><span class="stat-sword">⚔</span>${formatStat(unit.atk)}</span>
       </span>
     </div>
   `;
@@ -619,36 +886,64 @@ function createBattleUnitElement(unit, isEnemy) {
 }
 
 function renderBattleUnits() {
+  if (!battleState) return;
+  const firstLivingEnemy = battleState.enemyTeam.find((u) => !u.dead);
+  const firstLivingPlayer = battleState.playerTeam.find((u) => !u.dead);
+
   enemyTerritoryEl.innerHTML = '';
-  NPC_ENEMY_BALLS.forEach((enemy) => {
-    enemyTerritoryEl.appendChild(createBattleUnitElement(enemy, true));
+  battleState.enemyTeam.forEach((enemy) => {
+    const isFront = Boolean(firstLivingEnemy && firstLivingEnemy.uid === enemy.uid);
+    enemyTerritoryEl.appendChild(createBattleUnitElement(enemy, true, isFront));
   });
 
   playerTerritoryEl.innerHTML = '';
-  profile.equippedBalls.forEach((ballId) => {
-    const ball = BALL_CATALOG[ballId];
-    if (!ball) return;
-    playerTerritoryEl.appendChild(createBattleUnitElement(ball, false));
+  battleState.playerTeam.forEach((playerUnit) => {
+    const isFront = Boolean(firstLivingPlayer && firstLivingPlayer.uid === playerUnit.uid);
+    playerTerritoryEl.appendChild(createBattleUnitElement(playerUnit, false, isFront));
   });
 }
 
 function renderBattleSpeed() {
-  const speed = BATTLE_SPEEDS[battleSpeedIndex] || 1;
+  const speed = getBattleSpeed();
   battleSpeedBtn.textContent = `${speed}倍速`;
   battleSpeedBtn.classList.toggle('battle-speed-btn-1x', speed === 1);
   battleSpeedBtn.classList.toggle('battle-speed-btn-3x', speed === 3);
   battleScreenEl.style.setProperty('--battle-speed', String(speed));
 }
 
+function renderBattleHudStrip() {
+  if (!battleState) return;
+  const mult = getPerfectMultiplier(battleState.perfectStreak);
+  if (battleState.turn === 'enemy') {
+    battleTurnBadge.textContent = '敵のターン';
+    battleTurnBadge.classList.add('battle-turn-badge-enemy');
+  } else if (battleState.turn === 'finished') {
+    battleTurnBadge.textContent = 'バトル終了';
+    battleTurnBadge.classList.remove('battle-turn-badge-enemy');
+  } else {
+    battleTurnBadge.textContent = 'あなたのターン';
+    battleTurnBadge.classList.remove('battle-turn-badge-enemy');
+  }
+
+  typingComboBadge.textContent =
+    battleState.perfectStreak > 0
+      ? `PERFECT ×${mult.toFixed(1)} (${battleState.perfectStreak}連続)`
+      : `攻撃倍率 ×${mult.toFixed(1)}`;
+  typingComboBadge.classList.toggle('typing-combo-badge-active', battleState.perfectStreak > 0);
+}
+
 function renderBattleTyping() {
-  typingKanaEl.textContent = BATTLE_WORD.kana;
+  if (!battleState) return;
+  renderBattleHudStrip();
+  const word = battleState.currentWord;
+  typingKanaEl.textContent = word.kana;
   typingRomajiEl.innerHTML = '';
-  for (let i = 0; i < BATTLE_WORD.romaji.length; i++) {
+  for (let i = 0; i < word.romaji.length; i++) {
     const span = document.createElement('span');
-    span.textContent = BATTLE_WORD.romaji[i];
-    if (i < typedIndex) {
+    span.textContent = word.romaji[i];
+    if (i < battleState.typedIndex) {
       span.className = 'typing-char-done';
-    } else if (i === typedIndex) {
+    } else if (i === battleState.typedIndex) {
       span.className = 'typing-char-next';
     } else {
       span.className = 'typing-char-rest';
@@ -657,48 +952,315 @@ function renderBattleTyping() {
   }
 }
 
-function triggerPlayerLunge() {
-  const speed = BATTLE_SPEEDS[battleSpeedIndex] || 1;
-  const duration = Math.max(90, Math.round(220 / speed));
-  const units = Array.from(playerTerritoryEl.querySelectorAll('.battle-unit'));
-  units.forEach((unit) => {
-    unit.classList.remove('battle-unit-lunge');
-    void unit.offsetWidth;
-    unit.classList.add('battle-unit-lunge');
+function spawnProjectileFx(fromPlayer) {
+  const orb = document.createElement('div');
+  orb.className = `battle-projectile ${fromPlayer ? 'battle-projectile-player' : 'battle-projectile-enemy'}`;
+  battleFxLayer.appendChild(orb);
+  setTimeout(() => {
+    orb.remove();
+  }, Math.max(80, Math.round(280 / getBattleSpeed())));
+}
+
+function showUnitImpactAndPopup(uid, label, popupType, showBurst) {
+  const unitEl = battleScreenEl.querySelector(`.battle-unit[data-uid="${uid}"]`);
+  if (!unitEl) return;
+
+  if (showBurst) {
+    unitEl.classList.remove('battle-unit-hit');
+    void unitEl.offsetWidth;
+    unitEl.classList.add('battle-unit-hit');
+
+    const burst = document.createElement('div');
+    burst.className = 'battle-impact-burst';
+    burst.innerHTML = `
+      <svg viewBox="0 0 64 64" width="100%" height="100%" aria-hidden="true">
+        <polygon points="32,2 40,22 62,18 46,34 58,54 36,44 24,62 22,40 2,36 20,24" fill="#FACC15" stroke="#000000" stroke-width="3.5" stroke-linejoin="round" />
+        <polygon points="32,14 37,26 50,24 41,34 48,46 35,40 28,50 27,37 14,35 25,27" fill="#FFFFFF" />
+      </svg>
+    `;
+    unitEl.appendChild(burst);
     setTimeout(() => {
-      unit.classList.remove('battle-unit-lunge');
-    }, duration);
-  });
+      burst.remove();
+      unitEl.classList.remove('battle-unit-hit');
+    }, Math.max(110, Math.round(360 / getBattleSpeed())));
+  }
+
+  const popup = document.createElement('div');
+  popup.className = `battle-float-popup ${popupType}`;
+  popup.textContent = label;
+  unitEl.appendChild(popup);
+  setTimeout(() => {
+    popup.remove();
+  }, Math.max(220, Math.round(700 / getBattleSpeed())));
+}
+
+function openBattleResultModal(didWin) {
+  if (!battleState) return;
+  battleState.turn = 'finished';
+  battleState.isResolvingTurn = true;
+  renderBattleHudStrip();
+
+  battleResultHeader.classList.toggle('battle-result-header-win', didWin);
+  battleResultHeader.classList.toggle('battle-result-header-lose', !didWin);
+  battleResultTitle.textContent = didWin ? '勝利！' : '敗北...';
+
+  battleResultSummary.textContent = `入力単語数: ${battleState.wordsCompleted}語 / パーフェクト: ${battleState.perfectWordsCount}回 / 最大倍率: ×${battleState.maxMultiplierReached.toFixed(1)}`;
+
+  if (didWin) {
+    playVictoryFanfare(profile.volume);
+    battleRewardSection.classList.remove('hidden');
+    battleRewardClaimedMsg.classList.add('hidden');
+    battleRetryBtn.classList.add('hidden');
+    battleResultEquipBtn.classList.add('hidden');
+    battleResultHomeBtn.classList.add('hidden');
+    battleRewardGrid.innerHTML = '';
+
+    battleState.enemyTeam.forEach((enemyUnit) => {
+      const ball = BALL_CATALOG[enemyUnit.ballId];
+      if (!ball) return;
+      const btn = document.createElement('button');
+      const card = createBallCardHTML(ball, ball.name);
+      btn.type = 'button';
+      btn.className = 'ball-card';
+      btn.style.backgroundColor = card.bg;
+      btn.setAttribute('aria-label', `${ball.name}を受け取る`);
+      btn.innerHTML = card.html;
+      btn.addEventListener('click', () => {
+        if (!battleState || battleState.rewardClaimed) return;
+        battleState.rewardClaimed = true;
+        playSaveSound(profile.volume);
+
+        if (!profile.ownedBalls.includes(ball.id)) {
+          profile.ownedBalls = [...profile.ownedBalls, ball.id];
+        }
+        profile.ballCounts = {
+          ...profile.ballCounts,
+          [ball.id]: (profile.ballCounts[ball.id] || 0) + 1,
+        };
+        saveProfile(profile);
+
+        Array.from(battleRewardGrid.querySelectorAll('button')).forEach((b) => {
+          b.disabled = true;
+        });
+        btn.disabled = false;
+        btn.classList.add('battle-reward-card-picked');
+
+        battleRewardClaimedMsg.textContent = `${ball.name} を手に入れた！（所持数: ×${profile.ballCounts[ball.id]}）`;
+        battleRewardClaimedMsg.classList.remove('hidden');
+        battleRetryBtn.classList.remove('hidden');
+        battleResultEquipBtn.classList.remove('hidden');
+        battleResultHomeBtn.classList.remove('hidden');
+      });
+      battleRewardGrid.appendChild(btn);
+    });
+  } else {
+    playKnockoutSound(profile.volume);
+    battleRewardSection.classList.add('hidden');
+    battleRewardGrid.innerHTML = '';
+    battleRewardClaimedMsg.classList.add('hidden');
+    battleRetryBtn.classList.remove('hidden');
+    battleResultEquipBtn.classList.add('hidden');
+    battleResultHomeBtn.classList.remove('hidden');
+  }
+
+  battleResultModal.classList.remove('hidden');
+}
+
+async function trySpongeRevive(unit, sessionId) {
+  if (!unit.dead || unit.ballId !== 'sponge_ball' || unit.revived) return false;
+  await battleDelay(260);
+  if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return false;
+  unit.revived = true;
+  unit.dead = false;
+  unit.hp = roundStat(unit.maxHp / 2);
+  renderBattleUnits();
+  playHealSound(profile.volume);
+  showUnitImpactAndPopup(unit.uid, `復活! HP ${formatStat(unit.hp)}`, 'battle-float-heal', false);
+  return true;
+}
+
+async function resolveCombatRound(typingMultiplier) {
+  if (!battleState) return;
+  const sessionId = battleState.sessionId;
+  battleState.isResolvingTurn = true;
+
+  // 1. Player Front Ball Attacks
+  const playerFront = battleState.playerTeam.find((u) => !u.dead);
+  const enemyFront = battleState.enemyTeam.find((u) => !u.dead);
+  if (!playerFront || !enemyFront) {
+    battleState.isResolvingTurn = false;
+    return;
+  }
+
+  playerFront.attacksMade += 1;
+  let playerDmg = playerFront.atk * typingMultiplier;
+  let isRubberCrit = false;
+  if (playerFront.ballId === 'rubber_ball' && playerFront.attacksMade % 2 === 0) {
+    playerDmg *= 1.5;
+    isRubberCrit = true;
+  }
+  playerDmg = roundStat(playerDmg);
+
+  const playerEl = battleScreenEl.querySelector(`.battle-unit[data-uid="${playerFront.uid}"]`);
+  if (playerEl) playerEl.classList.add('battle-unit-lunge-left');
+  spawnProjectileFx(true);
+
+  await battleDelay(210);
+  if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
+
+  enemyFront.hp = Math.max(0, roundStat(enemyFront.hp - playerDmg));
+  const isStrongHit = typingMultiplier > 1 || isRubberCrit;
+  playAttackHitSound(profile.volume, isStrongHit);
+
+  if (enemyFront.hp <= 0) {
+    enemyFront.hp = 0;
+    enemyFront.dead = true;
+    playKnockoutSound(profile.volume);
+  }
+
+  renderBattleUnits();
+  const dmgText = isRubberCrit
+    ? `-${formatStat(playerDmg)} (1.5倍!)`
+    : typingMultiplier > 1
+      ? `-${formatStat(playerDmg)} (×${typingMultiplier.toFixed(1)})`
+      : `-${formatStat(playerDmg)}`;
+  showUnitImpactAndPopup(
+    enemyFront.uid,
+    dmgText,
+    isStrongHit ? 'battle-float-crit' : 'battle-float-dmg',
+    true
+  );
+
+  // Sponge Ball once-per-battle revive at half max HP
+  if (enemyFront.dead) {
+    await trySpongeRevive(enemyFront, sessionId);
+    if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
+  }
+
+  if (battleState.enemyTeam.every((u) => u.dead)) {
+    await battleDelay(480);
+    if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
+    openBattleResultModal(true);
+    return;
+  }
+
+  // 2. Enemy Front Ball Counter-Attacks
+  battleState.turn = 'enemy';
+  renderBattleHudStrip();
+  await battleDelay(360);
+  if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
+
+  const activeEnemy = battleState.enemyTeam.find((u) => !u.dead);
+  const activePlayer = battleState.playerTeam.find((u) => !u.dead);
+  if (!activeEnemy || !activePlayer) {
+    battleState.isResolvingTurn = false;
+    return;
+  }
+
+  activeEnemy.attacksMade += 1;
+  let enemyDmg = activeEnemy.atk;
+  let enemyRubberCrit = false;
+  if (activeEnemy.ballId === 'rubber_ball' && activeEnemy.attacksMade % 2 === 0) {
+    enemyDmg *= 1.5;
+    enemyRubberCrit = true;
+  }
+  enemyDmg = roundStat(enemyDmg);
+
+  const enemyEl = battleScreenEl.querySelector(`.battle-unit[data-uid="${activeEnemy.uid}"]`);
+  if (enemyEl) enemyEl.classList.add('battle-unit-lunge-right');
+  spawnProjectileFx(false);
+
+  await battleDelay(210);
+  if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
+
+  activePlayer.hp = Math.max(0, roundStat(activePlayer.hp - enemyDmg));
+  playAttackHitSound(profile.volume, enemyRubberCrit);
+
+  if (activePlayer.hp <= 0) {
+    activePlayer.hp = 0;
+    activePlayer.dead = true;
+    playKnockoutSound(profile.volume);
+  }
+
+  renderBattleUnits();
+  showUnitImpactAndPopup(
+    activePlayer.uid,
+    enemyRubberCrit ? `-${formatStat(enemyDmg)} (1.5倍!)` : `-${formatStat(enemyDmg)}`,
+    enemyRubberCrit ? 'battle-float-crit' : 'battle-float-dmg',
+    true
+  );
+
+  // Sponge Ball once-per-battle revive at half max HP
+  if (activePlayer.dead) {
+    await trySpongeRevive(activePlayer, sessionId);
+    if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
+  }
+
+  if (battleState.playerTeam.every((u) => u.dead)) {
+    await battleDelay(480);
+    if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
+    openBattleResultModal(false);
+    return;
+  }
+
+  // 3. Advance to Next Word & Player Turn
+  await battleDelay(260);
+  if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
+
+  battleState.turn = 'player';
+  battleState.currentWord = pickNextWord(battleState.currentWord.romaji);
+  battleState.typedIndex = 0;
+  battleState.wordHasMistake = false;
+  battleState.isResolvingTurn = false;
+  renderBattleTyping();
 }
 
 function handleTypingChar(rawChar) {
   if (
     currentScreen !== 'battle' ||
     isMatchmaking ||
+    !battleState ||
+    battleState.isResolvingTurn ||
+    battleState.turn !== 'player' ||
     !noticeModal.classList.contains('hidden') ||
     !settingsModal.classList.contains('hidden') ||
-    !ballDetailModal.classList.contains('hidden')
+    !ballDetailModal.classList.contains('hidden') ||
+    !battleResultModal.classList.contains('hidden')
   ) {
     return;
   }
 
   const ch = rawChar.toLowerCase();
-  if (!/^[a-z]$/.test(ch)) return;
+  if (!/^[a-z-]$/.test(ch)) return;
 
-  const expected = BATTLE_WORD.romaji[typedIndex];
+  const word = battleState.currentWord;
+  const expected = word.romaji[battleState.typedIndex];
   if (ch === expected) {
-    typedIndex += 1;
-    if (typedIndex >= BATTLE_WORD.romaji.length) {
+    battleState.typedIndex += 1;
+    battleTypingBox.classList.remove('typing-error-flash');
+
+    if (battleState.typedIndex >= word.romaji.length) {
+      battleState.wordsCompleted += 1;
+      if (!battleState.wordHasMistake) {
+        battleState.perfectStreak += 1;
+        battleState.perfectWordsCount += 1;
+      } else {
+        battleState.perfectStreak = 0;
+      }
+      const mult = getPerfectMultiplier(battleState.perfectStreak);
+      battleState.maxMultiplierReached = Math.max(battleState.maxMultiplierReached, mult);
       playSaveSound(profile.volume);
-      triggerPlayerLunge();
-      typedIndex = 0;
+      renderBattleTyping();
+      resolveCombatRound(mult);
     } else {
       playClickSound(profile.volume);
+      renderBattleTyping();
     }
-    battleTypingBox.classList.remove('typing-error-flash');
-    renderBattleTyping();
   } else {
+    battleState.wordHasMistake = true;
+    battleState.perfectStreak = 0;
     playErrorSound(profile.volume);
+    renderBattleHudStrip();
     battleTypingBox.classList.add('typing-error-flash');
     if (typingErrorTimer) clearTimeout(typingErrorTimer);
     typingErrorTimer = setTimeout(() => {
@@ -710,6 +1272,7 @@ function handleTypingChar(rawChar) {
 function startVsMatchmaking() {
   if (isMatchmaking) return;
   isMatchmaking = true;
+  battleResultModal.classList.add('hidden');
   playOpenSound(profile.volume);
 
   matchmakingOverlay.classList.remove('hidden');
@@ -736,6 +1299,12 @@ function setScreen(screen) {
   const isEquip = currentScreen === 'equip';
   const isBattle = currentScreen === 'battle';
 
+  if (!isBattle) {
+    battleSessionCounter += 1;
+    battleState = null;
+    battleResultModal.classList.add('hidden');
+  }
+
   topHudEl.classList.toggle('hidden', isBattle);
   homeScreenEl.classList.toggle('hidden', !isHome);
   modeScreenEl.classList.toggle('hidden', !isMode);
@@ -752,7 +1321,8 @@ function setScreen(screen) {
   }
 
   if (isBattle) {
-    typedIndex = 0;
+    battleFxLayer.innerHTML = '';
+    initBattleState();
     renderBattleSpeed();
     renderBattleTyping();
     renderBattleUnits();
@@ -1047,6 +1617,21 @@ ballDetailModal.addEventListener('click', (e) => {
   if (e.target === ballDetailModal) {
     closeBallDetailModal();
   }
+});
+
+battleRetryBtn.addEventListener('click', () => {
+  battleResultModal.classList.add('hidden');
+  startVsMatchmaking();
+});
+
+battleResultEquipBtn.addEventListener('click', () => {
+  playClickSound(profile.volume);
+  setScreen('equip');
+});
+
+battleResultHomeBtn.addEventListener('click', () => {
+  playClickSound(profile.volume);
+  setScreen('home');
 });
 
 ballSearchInput.addEventListener('input', (e) => {
