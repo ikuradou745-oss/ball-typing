@@ -1,4 +1,9 @@
-import { BALL_CATALOG, RARITY_STYLES, getCatalogBallsByRarity } from './assets/ballImages.js';
+import {
+  BALL_CATALOG,
+  RARITY_STYLES,
+  getCatalogBallsByRarity,
+  getNextRarity,
+} from './assets/ballImages.js';
 
 const GRID_SIZE = 16;
 const TOTAL_PIXELS = GRID_SIZE * GRID_SIZE;
@@ -9,6 +14,7 @@ const MIN_USERNAME_LENGTH = 2;
 const MAX_USERNAME_LENGTH = 12;
 const MIN_EQUIPPED_BALLS = 1;
 const MAX_EQUIPPED_BALLS = 4;
+const MAX_SAME_BALL_EQUIP = 2;
 const DEFAULT_BALL_ID = 'sponge_ball';
 const STORAGE_KEY = 'ball_typing_profile_v1';
 
@@ -114,7 +120,7 @@ function normalizeEquippedBalls(equipped, ownedBalls, ballCounts) {
   if (Array.isArray(equipped)) {
     for (const id of equipped) {
       if (typeof id !== 'string' || !ownedSet.has(id)) continue;
-      const limit = ballCounts[id] || 1;
+      const limit = Math.min(MAX_SAME_BALL_EQUIP, ballCounts[id] || 1);
       const current = used[id] || 0;
       if (current < limit && valid.length < MAX_EQUIPPED_BALLS) {
         valid.push(id);
@@ -493,9 +499,6 @@ const equippedCountText = document.getElementById('equipped-count-text');
 const ownedCountText = document.getElementById('owned-count-text');
 const equippedSlotsGrid = document.getElementById('equipped-slots-grid');
 const ownedBallsGrid = document.getElementById('owned-balls-grid');
-const equipCatalogSection = document.getElementById('equip-catalog-section');
-const catalogCountText = document.getElementById('catalog-count-text');
-const catalogBallsGrid = document.getElementById('catalog-balls-grid');
 const ballSearchInput = document.getElementById('ball-search-input');
 
 const ballDetailModal = document.getElementById('ball-detail-modal');
@@ -592,9 +595,10 @@ function unequipBallAtSlot(slotIndex, triggerEl) {
 
 function toggleEquipBall(ballId, triggerEl) {
   const ownedCount = profile.ballCounts[ballId] || 1;
+  const maxAllowed = Math.min(MAX_SAME_BALL_EQUIP, ownedCount);
   const equippedCount = profile.equippedBalls.filter((id) => id === ballId).length;
 
-  if (equippedCount < ownedCount) {
+  if (equippedCount < maxAllowed) {
     if (profile.equippedBalls.length >= MAX_EQUIPPED_BALLS) {
       playErrorSound(profile.volume);
       triggerShake(triggerEl);
@@ -603,6 +607,11 @@ function toggleEquipBall(ballId, triggerEl) {
     }
     playOpenSound(profile.volume);
     profile.equippedBalls = [...profile.equippedBalls, ballId];
+  } else if (ownedCount > MAX_SAME_BALL_EQUIP && equippedCount >= MAX_SAME_BALL_EQUIP) {
+    playErrorSound(profile.volume);
+    triggerShake(triggerEl);
+    showEquipFeedback('同じボールは2体まで装備できます');
+    return;
   } else {
     if (profile.equippedBalls.length <= MIN_EQUIPPED_BALLS) {
       playErrorSound(profile.volume);
@@ -676,7 +685,9 @@ function renderEquipScreen() {
   equipModeInfoBtn.classList.toggle('equip-mode-btn-active-info', isInfoMode);
 
   equipTopHint.textContent = isInfoMode ? 'タップして能力を見る' : 'タップして外す';
-  equipBottomHint.textContent = isInfoMode ? 'タップして能力を見る' : 'タップして装備';
+  equipBottomHint.textContent = isInfoMode
+    ? 'タップして能力を見る'
+    : 'タップして装備 (同じボール最大2体)';
 
   const totalOwnedCount = profile.ownedBalls.reduce(
     (sum, id) => sum + (profile.ballCounts[id] || 1),
@@ -719,7 +730,7 @@ function renderEquipScreen() {
     }
   }
 
-  // Lower: Owned Balls (with name search filter)
+  // Lower: Owned Balls (only owned balls can be inspected in 説明モード)
   const query = ballSearchQuery.trim().toLowerCase();
   const filteredOwned = profile.ownedBalls.filter((ballId) => {
     const ball = BALL_CATALOG[ballId];
@@ -763,34 +774,6 @@ function renderEquipScreen() {
       ownedBallsGrid.appendChild(cardBtn);
     });
   }
-
-  // Unowned Catalog Section (Visible only in 説明モード so players can inspect all character data)
-  const ownedSet = new Set(profile.ownedBalls);
-  const unownedBalls = Object.values(BALL_CATALOG).filter((ball) => {
-    if (ownedSet.has(ball.id)) return false;
-    if (!query) return true;
-    return ball.name.toLowerCase().includes(query);
-  });
-
-  if (isInfoMode && unownedBalls.length > 0) {
-    equipCatalogSection.classList.remove('hidden');
-    catalogCountText.textContent = `${unownedBalls.length}個`;
-    catalogBallsGrid.innerHTML = '';
-    unownedBalls.forEach((ball) => {
-      const cardBtn = document.createElement('button');
-      const card = createBallCardHTML(ball, ball.name);
-      cardBtn.type = 'button';
-      cardBtn.className = 'ball-card ball-card-unowned';
-      cardBtn.style.backgroundColor = card.bg;
-      cardBtn.setAttribute('aria-label', `${ball.name}（未所持・タップして性能・能力を見る）`);
-      cardBtn.innerHTML = card.html;
-      cardBtn.addEventListener('click', () => openBallDetailModal(ball));
-      catalogBallsGrid.appendChild(cardBtn);
-    });
-  } else {
-    equipCatalogSection.classList.add('hidden');
-    catalogBallsGrid.innerHTML = '';
-  }
 }
 
 function getBattleSpeed() {
@@ -802,6 +785,38 @@ function battleDelay(baseMs) {
   return new Promise((resolve) => {
     setTimeout(resolve, Math.max(40, Math.round(baseMs / speed)));
   });
+}
+
+function countOwnedByRarity(rarity) {
+  return profile.ownedBalls.reduce((sum, id) => {
+    const ball = BALL_CATALOG[id];
+    if (ball && ball.rarity === rarity) {
+      return sum + (profile.ballCounts[id] || 1);
+    }
+    return sum;
+  }, 0);
+}
+
+function pickEnemyBallForPlayerUnit(playerUnit) {
+  const baseRarity = playerUnit.rarity;
+  const tier = RARITY_STYLES[baseRarity] ? RARITY_STYLES[baseRarity].tier : 0;
+  const ownedOfBaseRarity = countOwnedByRarity(baseRarity);
+  let targetRarity = baseRarity;
+
+  if (ownedOfBaseRarity >= 6) {
+    const nextRarity = getNextRarity(baseRarity);
+    const nextCandidates = nextRarity ? getCatalogBallsByRarity(nextRarity) : [];
+    if (nextRarity && nextCandidates.length > 0) {
+      const upgradeChance = 0.1 / Math.pow(2, tier);
+      if (Math.random() < upgradeChance) {
+        targetRarity = nextRarity;
+      }
+    }
+  }
+
+  const pool = getCatalogBallsByRarity(targetRarity);
+  const fallbackPool = pool.length > 0 ? pool : getCatalogBallsByRarity(baseRarity);
+  return fallbackPool[Math.floor(Math.random() * fallbackPool.length)];
 }
 
 function createUnitInstance(ball, uid) {
@@ -816,7 +831,13 @@ function createUnitInstance(ball, uid) {
     atk: ball.atk,
     svg: ball.svg,
     revived: false,
+    exploded: false,
     attacksMade: 0,
+    turnCounter: 0,
+    isHardened: false,
+    atkDebuffTurns: 0,
+    atkMultiplier: 1,
+    missDebuffTurns: 0,
     dead: false,
   };
 }
@@ -829,8 +850,7 @@ function initBattleState() {
   });
 
   const enemyTeam = playerTeam.map((playerUnit, idx) => {
-    const sameRarityBalls = getCatalogBallsByRarity(playerUnit.rarity);
-    const picked = sameRarityBalls[Math.floor(Math.random() * sameRarityBalls.length)];
+    const picked = pickEnemyBallForPlayerUnit(playerUnit);
     return createUnitInstance(picked, `e_${idx}`);
   });
 
@@ -859,6 +879,7 @@ function createBattleUnitElement(unit, isEnemy, isFrontLiving) {
     isEnemy ? 'battle-unit-enemy' : 'battle-unit-player',
     unit.dead ? 'battle-unit-dead' : '',
     isFrontLiving ? 'battle-unit-active' : '',
+    unit.isHardened ? 'battle-unit-hardened' : '',
   ]
     .filter(Boolean)
     .join(' ');
@@ -866,8 +887,28 @@ function createBattleUnitElement(unit, isEnemy, isFrontLiving) {
   const hpPct = Math.max(0, Math.min(100, (unit.hp / unit.maxHp) * 100));
   const statusTag = unit.dead ? '撃破' : isFrontLiving ? '先頭' : '';
 
+  const chips = [];
+  if (!unit.dead) {
+    if (unit.isHardened) {
+      chips.push('<span class="battle-unit-status-chip battle-chip-shield">固まる</span>');
+    }
+    if (unit.atkDebuffTurns > 0) {
+      chips.push(
+        `<span class="battle-unit-status-chip battle-chip-debuff">攻75%(${unit.atkDebuffTurns})</span>`
+      );
+    }
+    if (unit.missDebuffTurns > 0) {
+      chips.push(
+        `<span class="battle-unit-status-chip battle-chip-miss">命中50%(${unit.missDebuffTurns})</span>`
+      );
+    }
+  }
+
+  const effectiveAtk = roundStat(unit.atk * (unit.atkDebuffTurns > 0 ? unit.atkMultiplier : 1));
+
   wrapper.innerHTML = `
     ${statusTag ? `<span class="battle-unit-front-tag">${statusTag}</span>` : ''}
+    ${chips.length > 0 ? `<div class="battle-unit-status-row">${chips.join('')}</div>` : ''}
     <div class="battle-unit-sprite-wrap" role="img" aria-label="${unit.name}">
       ${unit.svg}
     </div>
@@ -878,7 +919,7 @@ function createBattleUnitElement(unit, isEnemy, isFrontLiving) {
       <span class="battle-stat-lv">Lv.${unit.level}</span>
       <span class="battle-stat-nums">
         <span><span class="stat-heart">♥</span>${formatStat(unit.hp)}</span>
-        <span><span class="stat-sword">⚔</span>${formatStat(unit.atk)}</span>
+        <span><span class="stat-sword">⚔</span>${formatStat(effectiveAtk)}</span>
       </span>
     </div>
   `;
@@ -1066,17 +1107,190 @@ function openBattleResultModal(didWin) {
   battleResultModal.classList.remove('hidden');
 }
 
-async function trySpongeRevive(unit, sessionId) {
-  if (!unit.dead || unit.ballId !== 'sponge_ball' || unit.revived) return false;
-  await battleDelay(260);
-  if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return false;
-  unit.revived = true;
-  unit.dead = false;
-  unit.hp = roundStat(unit.maxHp / 2);
+async function handleUnitDefeat(unit, opposingTeam, ownTeam, sessionId) {
+  if (!unit.dead) return;
+  unit.isHardened = false;
+  unit.atkDebuffTurns = 0;
+  unit.atkMultiplier = 1;
+  unit.missDebuffTurns = 0;
+
+  // Sponge Ball once-per-battle revive at half max HP
+  if (unit.ballId === 'sponge_ball' && !unit.revived) {
+    await battleDelay(260);
+    if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
+    unit.revived = true;
+    unit.dead = false;
+    unit.hp = roundStat(unit.maxHp / 2);
+    renderBattleUnits();
+    playHealSound(profile.volume);
+    showUnitImpactAndPopup(unit.uid, `復活! HP ${formatStat(unit.hp)}`, 'battle-float-heal', false);
+    return;
+  }
+
+  // Plastic Ball death explosion (3x ATK damage to opposing front ball)
+  if (unit.ballId === 'plastic_ball' && !unit.exploded) {
+    unit.exploded = true;
+    const unitEl = battleScreenEl.querySelector(`.battle-unit[data-uid="${unit.uid}"]`);
+    if (unitEl) {
+      unitEl.classList.add('battle-unit-swell');
+    }
+    await battleDelay(220);
+    if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
+
+    const blastTarget = opposingTeam.find((u) => !u.dead);
+    if (blastTarget) {
+      let boomDmg = unit.atk * 3;
+      if (blastTarget.isHardened) {
+        boomDmg *= 0.5;
+      }
+      boomDmg = roundStat(boomDmg);
+      blastTarget.hp = Math.max(0, roundStat(blastTarget.hp - boomDmg));
+      if (blastTarget.hp <= 0) {
+        blastTarget.hp = 0;
+        blastTarget.dead = true;
+        playKnockoutSound(profile.volume);
+      } else {
+        playAttackHitSound(profile.volume, true);
+      }
+      renderBattleUnits();
+      showUnitImpactAndPopup(unit.uid, '大爆発!', 'battle-float-boom', true);
+      showUnitImpactAndPopup(
+        blastTarget.uid,
+        `-${formatStat(boomDmg)} (爆発!)`,
+        'battle-float-boom',
+        true
+      );
+
+      if (blastTarget.dead) {
+        await handleUnitDefeat(blastTarget, ownTeam, opposingTeam, sessionId);
+      }
+    }
+  }
+}
+
+async function executeUnitTurn(attacker, ownTeam, defenderTeam, isPlayerAttacker, typingMultiplier, sessionId) {
+  attacker.turnCounter += 1;
+  attacker.isHardened = false;
+
+  // Stone Ball: every 3rd turn enters "固まる" state (halves incoming damage, skips attack)
+  if (attacker.ballId === 'stone_ball' && attacker.turnCounter % 3 === 0) {
+    attacker.isHardened = true;
+    renderBattleUnits();
+    playHealSound(profile.volume);
+    showUnitImpactAndPopup(attacker.uid, '固まる! (半減)', 'battle-float-shield', false);
+    await battleDelay(320);
+    return;
+  }
+
+  const defender = defenderTeam.find((u) => !u.dead);
+  if (!defender) return;
+
+  // Grass Ball miss debuff check
+  if (attacker.missDebuffTurns > 0) {
+    attacker.missDebuffTurns -= 1;
+    if (Math.random() < 0.5) {
+      if (attacker.atkDebuffTurns > 0) {
+        attacker.atkDebuffTurns -= 1;
+        if (attacker.atkDebuffTurns === 0) attacker.atkMultiplier = 1;
+      }
+      const attEl = battleScreenEl.querySelector(`.battle-unit[data-uid="${attacker.uid}"]`);
+      if (attEl) {
+        attEl.classList.add(isPlayerAttacker ? 'battle-unit-lunge-left' : 'battle-unit-lunge-right');
+      }
+      await battleDelay(180);
+      if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
+      renderBattleUnits();
+      playErrorSound(profile.volume);
+      showUnitImpactAndPopup(defender.uid, 'MISS!', 'battle-float-miss', false);
+      return;
+    }
+  }
+
+  attacker.attacksMade += 1;
+  let dmg = attacker.atk * (isPlayerAttacker ? typingMultiplier : 1);
+
+  if (attacker.atkDebuffTurns > 0) {
+    dmg *= attacker.atkMultiplier;
+    attacker.atkDebuffTurns -= 1;
+    if (attacker.atkDebuffTurns === 0) {
+      attacker.atkMultiplier = 1;
+    }
+  }
+
+  let isRubberCrit = false;
+  if (attacker.ballId === 'rubber_ball' && attacker.attacksMade % 2 === 0) {
+    dmg *= 1.5;
+    isRubberCrit = true;
+  }
+
+  const isSuperJump = attacker.ballId === 'super_ball' && attacker.attacksMade % 3 === 0;
+  const isBushAttack = attacker.ballId === 'grass_ball' && attacker.turnCounter % 4 === 0;
+
+  let wasHalved = false;
+  if (defender.isHardened) {
+    dmg *= 0.5;
+    wasHalved = true;
+  }
+  dmg = roundStat(dmg);
+
+  const attackerEl = battleScreenEl.querySelector(`.battle-unit[data-uid="${attacker.uid}"]`);
+  if (attackerEl) {
+    if (isSuperJump) {
+      attackerEl.classList.add(
+        isPlayerAttacker ? 'battle-unit-super-jump-left' : 'battle-unit-super-jump-right'
+      );
+    } else {
+      attackerEl.classList.add(
+        isPlayerAttacker ? 'battle-unit-lunge-left' : 'battle-unit-lunge-right'
+      );
+    }
+  }
+  spawnProjectileFx(isPlayerAttacker);
+
+  await battleDelay(isSuperJump ? 260 : 210);
+  if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
+
+  defender.hp = Math.max(0, roundStat(defender.hp - dmg));
+  const isStrongHit = (isPlayerAttacker && typingMultiplier > 1) || isRubberCrit || isSuperJump || isBushAttack;
+  playAttackHitSound(profile.volume, isStrongHit);
+
+  if (defender.hp <= 0) {
+    defender.hp = 0;
+    defender.dead = true;
+    playKnockoutSound(profile.volume);
+  } else {
+    if (isSuperJump) {
+      defender.atkDebuffTurns = 2;
+      defender.atkMultiplier = 0.75;
+    }
+    if (isBushAttack) {
+      defender.missDebuffTurns = 2;
+    }
+  }
+
   renderBattleUnits();
-  playHealSound(profile.volume);
-  showUnitImpactAndPopup(unit.uid, `復活! HP ${formatStat(unit.hp)}`, 'battle-float-heal', false);
-  return true;
+
+  let dmgLabel = `-${formatStat(dmg)}`;
+  if (isRubberCrit) dmgLabel += ' (1.5倍!)';
+  else if (isPlayerAttacker && typingMultiplier > 1) dmgLabel += ` (×${typingMultiplier.toFixed(1)})`;
+  if (wasHalved) dmgLabel += ' (半減)';
+
+  showUnitImpactAndPopup(
+    defender.uid,
+    dmgLabel,
+    isStrongHit ? 'battle-float-crit' : 'battle-float-dmg',
+    true
+  );
+
+  if (!defender.dead && isSuperJump) {
+    showUnitImpactAndPopup(defender.uid, '特大ジャンプ! 攻75%', 'battle-float-debuff', false);
+  } else if (!defender.dead && isBushAttack) {
+    showUnitImpactAndPopup(defender.uid, 'しげみ! 命中50%', 'battle-float-heal', false);
+  }
+
+  if (defender.dead) {
+    await handleUnitDefeat(defender, ownTeam, defenderTeam, sessionId);
+  }
 }
 
 async function resolveCombatRound(typingMultiplier) {
@@ -1084,56 +1298,17 @@ async function resolveCombatRound(typingMultiplier) {
   const sessionId = battleState.sessionId;
   battleState.isResolvingTurn = true;
 
-  // 1. Player Front Ball Attacks
+  // 1. Player Front Ball Turn
   const playerFront = battleState.playerTeam.find((u) => !u.dead);
-  const enemyFront = battleState.enemyTeam.find((u) => !u.dead);
-  if (!playerFront || !enemyFront) {
-    battleState.isResolvingTurn = false;
-    return;
-  }
-
-  playerFront.attacksMade += 1;
-  let playerDmg = playerFront.atk * typingMultiplier;
-  let isRubberCrit = false;
-  if (playerFront.ballId === 'rubber_ball' && playerFront.attacksMade % 2 === 0) {
-    playerDmg *= 1.5;
-    isRubberCrit = true;
-  }
-  playerDmg = roundStat(playerDmg);
-
-  const playerEl = battleScreenEl.querySelector(`.battle-unit[data-uid="${playerFront.uid}"]`);
-  if (playerEl) playerEl.classList.add('battle-unit-lunge-left');
-  spawnProjectileFx(true);
-
-  await battleDelay(210);
-  if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
-
-  enemyFront.hp = Math.max(0, roundStat(enemyFront.hp - playerDmg));
-  const isStrongHit = typingMultiplier > 1 || isRubberCrit;
-  playAttackHitSound(profile.volume, isStrongHit);
-
-  if (enemyFront.hp <= 0) {
-    enemyFront.hp = 0;
-    enemyFront.dead = true;
-    playKnockoutSound(profile.volume);
-  }
-
-  renderBattleUnits();
-  const dmgText = isRubberCrit
-    ? `-${formatStat(playerDmg)} (1.5倍!)`
-    : typingMultiplier > 1
-      ? `-${formatStat(playerDmg)} (×${typingMultiplier.toFixed(1)})`
-      : `-${formatStat(playerDmg)}`;
-  showUnitImpactAndPopup(
-    enemyFront.uid,
-    dmgText,
-    isStrongHit ? 'battle-float-crit' : 'battle-float-dmg',
-    true
-  );
-
-  // Sponge Ball once-per-battle revive at half max HP
-  if (enemyFront.dead) {
-    await trySpongeRevive(enemyFront, sessionId);
+  if (playerFront && battleState.enemyTeam.some((u) => !u.dead)) {
+    await executeUnitTurn(
+      playerFront,
+      battleState.playerTeam,
+      battleState.enemyTeam,
+      true,
+      typingMultiplier,
+      sessionId
+    );
     if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
   }
 
@@ -1144,56 +1319,37 @@ async function resolveCombatRound(typingMultiplier) {
     return;
   }
 
-  // 2. Enemy Front Ball Counter-Attacks
+  if (battleState.playerTeam.every((u) => u.dead)) {
+    await battleDelay(480);
+    if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
+    openBattleResultModal(false);
+    return;
+  }
+
+  // 2. Enemy Front Ball Turn
   battleState.turn = 'enemy';
   renderBattleHudStrip();
   await battleDelay(360);
   if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
 
   const activeEnemy = battleState.enemyTeam.find((u) => !u.dead);
-  const activePlayer = battleState.playerTeam.find((u) => !u.dead);
-  if (!activeEnemy || !activePlayer) {
-    battleState.isResolvingTurn = false;
-    return;
-  }
-
-  activeEnemy.attacksMade += 1;
-  let enemyDmg = activeEnemy.atk;
-  let enemyRubberCrit = false;
-  if (activeEnemy.ballId === 'rubber_ball' && activeEnemy.attacksMade % 2 === 0) {
-    enemyDmg *= 1.5;
-    enemyRubberCrit = true;
-  }
-  enemyDmg = roundStat(enemyDmg);
-
-  const enemyEl = battleScreenEl.querySelector(`.battle-unit[data-uid="${activeEnemy.uid}"]`);
-  if (enemyEl) enemyEl.classList.add('battle-unit-lunge-right');
-  spawnProjectileFx(false);
-
-  await battleDelay(210);
-  if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
-
-  activePlayer.hp = Math.max(0, roundStat(activePlayer.hp - enemyDmg));
-  playAttackHitSound(profile.volume, enemyRubberCrit);
-
-  if (activePlayer.hp <= 0) {
-    activePlayer.hp = 0;
-    activePlayer.dead = true;
-    playKnockoutSound(profile.volume);
-  }
-
-  renderBattleUnits();
-  showUnitImpactAndPopup(
-    activePlayer.uid,
-    enemyRubberCrit ? `-${formatStat(enemyDmg)} (1.5倍!)` : `-${formatStat(enemyDmg)}`,
-    enemyRubberCrit ? 'battle-float-crit' : 'battle-float-dmg',
-    true
-  );
-
-  // Sponge Ball once-per-battle revive at half max HP
-  if (activePlayer.dead) {
-    await trySpongeRevive(activePlayer, sessionId);
+  if (activeEnemy && battleState.playerTeam.some((u) => !u.dead)) {
+    await executeUnitTurn(
+      activeEnemy,
+      battleState.enemyTeam,
+      battleState.playerTeam,
+      false,
+      1,
+      sessionId
+    );
     if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
+  }
+
+  if (battleState.enemyTeam.every((u) => u.dead)) {
+    await battleDelay(480);
+    if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
+    openBattleResultModal(true);
+    return;
   }
 
   if (battleState.playerTeam.every((u) => u.dead)) {

@@ -710,6 +710,57 @@ body {
   transform: translateX(28px) translateY(-10px) scale(1.08);
 }
 
+.battle-unit-super-jump-left {
+  transform: translateX(-34px) translateY(-54px) scale(1.22);
+}
+
+.battle-unit-super-jump-right {
+  transform: translateX(34px) translateY(-54px) scale(1.22);
+}
+
+.battle-unit-swell {
+  transform: scale(1.38);
+  filter: brightness(1.35);
+}
+
+.battle-unit-hardened .battle-unit-sprite-wrap {
+  filter: drop-shadow(0 0 8px #38bdf8) contrast(1.1);
+}
+
+.battle-unit-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 3px;
+}
+
+.battle-unit-status-chip {
+  padding: 1px 5px;
+  border: 1.5px solid #000000;
+  border-radius: 5px;
+  background-color: #e2e8f0;
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1.15;
+  color: #0f172a;
+  white-space: nowrap;
+}
+
+.battle-chip-shield {
+  background-color: #bae6fd;
+  color: #0369a1;
+}
+
+.battle-chip-debuff {
+  background-color: #fde68a;
+  color: #92400e;
+}
+
+.battle-chip-miss {
+  background-color: #bbf7d0;
+  color: #166534;
+}
+
 .battle-unit-hit {
   animation: battle-hit-shake calc(240ms / var(--battle-speed, 1)) ease-in-out;
 }
@@ -796,6 +847,26 @@ body {
 .battle-float-heal {
   background-color: #28c76f;
   color: #000000;
+}
+
+.battle-float-shield {
+  background-color: #38bdf8;
+  color: #000000;
+}
+
+.battle-float-debuff {
+  background-color: #a855f7;
+  color: #ffffff;
+}
+
+.battle-float-miss {
+  background-color: #94a3b8;
+  color: #0f172a;
+}
+
+.battle-float-boom {
+  background-color: #f97316;
+  color: #ffffff;
 }
 
 @keyframes float-pop {
