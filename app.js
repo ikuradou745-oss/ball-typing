@@ -46,6 +46,15 @@ import {
   resolveParryOnDefender,
   roundStat,
 } from './lib/ballCombatHelpers.js';
+import {
+  ACTIVE_BATTLE_STORAGE_KEY,
+  advancePityOnBattleWin,
+  deserializeBattleState,
+  getGuaranteedPityRarity,
+  getNextBallGuideSummary,
+  normalizePityWins,
+  serializeBattleState,
+} from './lib/ballProgressHelpers.js';
 
 const GRID_SIZE = 16;
 const TOTAL_PIXELS = GRID_SIZE * GRID_SIZE;
@@ -187,6 +196,7 @@ function loadProfile() {
         ownedBalls: [DEFAULT_BALL_ID],
         ballCounts: { [DEFAULT_BALL_ID]: 1 },
         equippedBalls: [DEFAULT_BALL_ID],
+        pityWins: normalizePityWins({}),
       };
     }
     const parsed = JSON.parse(raw);
@@ -205,7 +215,8 @@ function loadProfile() {
     const ownedBalls = normalizeOwnedBalls(parsed.ownedBalls);
     const ballCounts = normalizeBallCounts(parsed.ballCounts, ownedBalls);
     const equippedBalls = normalizeEquippedBalls(parsed.equippedBalls, ownedBalls, ballCounts);
-    return { username, pixels, volume, ownedBalls, ballCounts, equippedBalls };
+    const pityWins = normalizePityWins(parsed.pityWins);
+    return { username, pixels, volume, ownedBalls, ballCounts, equippedBalls, pityWins };
   } catch {
     return {
       username: DEFAULT_USERNAME,
@@ -214,6 +225,7 @@ function loadProfile() {
       ownedBalls: [DEFAULT_BALL_ID],
       ballCounts: { [DEFAULT_BALL_ID]: 1 },
       equippedBalls: [DEFAULT_BALL_ID],
+      pityWins: normalizePityWins({}),
     };
   }
 }
@@ -471,6 +483,7 @@ let isMatchmaking = false;
 let battleSpeedIndex = 0;
 let battleSessionCounter = 0;
 let battleState = null;
+let pendingResumeBattle = null;
 let typingErrorTimer = null;
 let equipMode = 'equip';
 let ballSearchQuery = '';
@@ -505,6 +518,7 @@ const equipBackBtn = document.getElementById('equip-back-btn');
 const openPlayBtn = document.getElementById('open-play-btn');
 const openEquipBtn = document.getElementById('open-equip-btn');
 const modeVsBtn = document.getElementById('mode-vs-btn');
+const openNextBallGuideBtn = document.getElementById('open-next-ball-guide-btn');
 const matchmakingOverlay = document.getElementById('matchmaking-overlay');
 
 const battleSpeedBtn = document.getElementById('battle-speed-btn');
@@ -634,6 +648,17 @@ const presenceOnlineCount = document.getElementById('presence-online-count');
 const presenceOnlineList = document.getElementById('presence-online-list');
 const presenceTodayCount = document.getElementById('presence-today-count');
 const presenceTodayList = document.getElementById('presence-today-list');
+
+const nextBallGuideModal = document.getElementById('next-ball-guide-modal');
+const nextBallGuideXBtn = document.getElementById('next-ball-guide-x-btn');
+const nextBallGuideCloseBtn = document.getElementById('next-ball-guide-close-btn');
+const nextBallSummaryCard = document.getElementById('next-ball-summary-card');
+const nextBallTierList = document.getElementById('next-ball-tier-list');
+
+const battleResumeModal = document.getElementById('battle-resume-modal');
+const battleResumeSummary = document.getElementById('battle-resume-summary');
+const battleResumeContinueBtn = document.getElementById('battle-resume-continue-btn');
+const battleResumeDiscardBtn = document.getElementById('battle-resume-discard-btn');
 
 const pixelCells = [];
 const swatchButtons = [];
@@ -980,6 +1005,53 @@ function createWoodWallUnit(summonerUnit) {
   };
 }
 
+function saveActiveBattleSnapshot() {
+  try {
+    if (currentScreen !== 'battle' || !battleState) {
+      return;
+    }
+    const snapshot = serializeBattleState(battleState, battleSpeedIndex);
+    if (!snapshot) {
+      localStorage.removeItem(ACTIVE_BATTLE_STORAGE_KEY);
+      return;
+    }
+    localStorage.setItem(ACTIVE_BATTLE_STORAGE_KEY, JSON.stringify(snapshot));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
+function clearActiveBattleSnapshot() {
+  try {
+    localStorage.removeItem(ACTIVE_BATTLE_STORAGE_KEY);
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+function loadActiveBattleSnapshot() {
+  try {
+    const raw = localStorage.getItem(ACTIVE_BATTLE_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const restored = deserializeBattleState(
+      parsed,
+      BALL_CATALOG,
+      WOOD_WALL_SVG,
+      DEFAULT_BALL_ID,
+      pickNextWord
+    );
+    if (!restored) {
+      clearActiveBattleSnapshot();
+      return null;
+    }
+    return restored;
+  } catch {
+    clearActiveBattleSnapshot();
+    return null;
+  }
+}
+
 function initBattleState() {
   battleSessionCounter += 1;
   const playerTeam = profile.equippedBalls.map((ballId, idx) => {
@@ -991,6 +1063,17 @@ function initBattleState() {
     const picked = pickEnemyBallForPlayerUnit(playerUnit);
     return createUnitInstance(picked, `e_${idx}`);
   });
+
+  // If the player has reached the guaranteed win threshold for Rare+, ensure at least 1 enemy spawns at that rarity
+  const guaranteedRarity = getGuaranteedPityRarity(profile, BALL_CATALOG);
+  if (guaranteedRarity && !enemyTeam.some((u) => u.rarity === guaranteedRarity)) {
+    const candidates = getCatalogBallsByRarity(guaranteedRarity);
+    if (candidates.length > 0) {
+      const slotIdx = Math.floor(Math.random() * enemyTeam.length);
+      const picked = candidates[Math.floor(Math.random() * candidates.length)];
+      enemyTeam[slotIdx] = createUnitInstance(picked, `e_${slotIdx}`);
+    }
+  }
 
   battleState = {
     sessionId: battleSessionCounter,
@@ -1220,6 +1303,7 @@ function openBattleResultModal(didWin) {
   if (!battleState) return;
   battleState.turn = 'finished';
   battleState.isResolvingTurn = true;
+  clearActiveBattleSnapshot();
   renderBattleHudStrip();
 
   battleResultHeader.classList.toggle('battle-result-header-win', didWin);
@@ -1229,6 +1313,11 @@ function openBattleResultModal(didWin) {
   battleResultSummary.textContent = `入力単語数: ${battleState.wordsCompleted}語 / パーフェクト: ${battleState.perfectWordsCount}回 / 最大倍率: ×${battleState.maxMultiplierReached.toFixed(1)}`;
 
   if (didWin) {
+    profile = {
+      ...profile,
+      pityWins: advancePityOnBattleWin(profile, battleState.enemyTeam, BALL_CATALOG),
+    };
+    saveProfile(profile);
     playVictoryFanfare(profile.volume);
     battleRewardSection.classList.remove('hidden');
     battleRewardClaimedMsg.classList.add('hidden');
@@ -1645,6 +1734,7 @@ async function resolveCombatRound(typingMultiplier) {
   // 2. Enemy Front Non-Wall Ball Turn
   battleState.turn = 'enemy';
   renderBattleHudStrip();
+  saveActiveBattleSnapshot();
   await battleDelay(360);
   if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
 
@@ -1687,6 +1777,7 @@ async function resolveCombatRound(typingMultiplier) {
   Object.assign(battleState, prepareNextTypingWord(battleState));
   battleState.isResolvingTurn = false;
   renderBattleTyping();
+  saveActiveBattleSnapshot();
 }
 
 function handleTypingChar(rawChar) {
@@ -1701,6 +1792,8 @@ function handleTypingChar(rawChar) {
     !ballDetailModal.classList.contains('hidden') ||
     !battleResultModal.classList.contains('hidden') ||
     !enemyGuideModal.classList.contains('hidden') ||
+    !nextBallGuideModal.classList.contains('hidden') ||
+    !battleResumeModal.classList.contains('hidden') ||
     !surveyModal.classList.contains('hidden') ||
     !adminCrownModal.classList.contains('hidden') ||
     !presenceModal.classList.contains('hidden')
@@ -1722,16 +1815,19 @@ function handleTypingChar(rawChar) {
       Object.assign(battleState, completed.state);
       playSaveSound(profile.volume);
       renderBattleTyping();
+      saveActiveBattleSnapshot();
       resolveCombatRound(completed.multiplier);
     } else {
       playClickSound(profile.volume);
       renderBattleTyping();
+      saveActiveBattleSnapshot();
     }
   } else {
     const mistake = applyTypingMistake(battleState);
     Object.assign(battleState, mistake.state);
     playErrorSound(profile.volume);
     renderBattleHudStrip();
+    saveActiveBattleSnapshot();
     if (mistake.outcome !== 'no_shield_miss' && typingShieldEmblem) {
       typingShieldEmblem.classList.remove('typing-shield-hit');
       void typingShieldEmblem.offsetWidth;
@@ -1748,6 +1844,7 @@ function handleTypingChar(rawChar) {
 function startVsMatchmaking() {
   if (isMatchmaking) return;
   isMatchmaking = true;
+  clearActiveBattleSnapshot();
   battleResultModal.classList.add('hidden');
   playOpenSound(profile.volume);
 
@@ -1768,18 +1865,11 @@ function startVsMatchmaking() {
   }, 220);
 }
 
-function setScreen(screen) {
-  currentScreen = screen;
+function applyScreenVisibility() {
   const isHome = currentScreen === 'home';
   const isMode = currentScreen === 'mode';
   const isEquip = currentScreen === 'equip';
   const isBattle = currentScreen === 'battle';
-
-  if (!isBattle) {
-    battleSessionCounter += 1;
-    battleState = null;
-    battleResultModal.classList.add('hidden');
-  }
 
   topHudEl.classList.toggle('hidden', isBattle);
   homeTopLeftActions.classList.toggle('hidden', !isHome);
@@ -1788,6 +1878,45 @@ function setScreen(screen) {
   equipScreenEl.classList.toggle('hidden', !isEquip);
   battleScreenEl.classList.toggle('hidden', !isBattle);
   equipBackBtn.classList.toggle('hidden', isHome || isBattle);
+}
+
+function resumeSavedBattle(restored) {
+  if (!restored || !restored.battleState) return;
+  pendingResumeBattle = null;
+  battleResumeModal.classList.add('hidden');
+  noticeModal.classList.add('hidden');
+
+  battleSpeedIndex = restored.battleSpeedIndex || 0;
+  battleSessionCounter += 1;
+  battleState = {
+    ...restored.battleState,
+    sessionId: battleSessionCounter,
+  };
+  currentScreen = 'battle';
+  applyScreenVisibility();
+  battleFxLayer.innerHTML = '';
+  renderBattleSpeed();
+  renderBattleTyping();
+  renderBattleUnits();
+  saveActiveBattleSnapshot();
+  setTimeout(() => {
+    mobileTypingInput.focus();
+  }, 40);
+}
+
+function setScreen(screen) {
+  currentScreen = screen;
+  const isEquip = currentScreen === 'equip';
+  const isBattle = currentScreen === 'battle';
+
+  if (!isBattle) {
+    battleSessionCounter += 1;
+    battleState = null;
+    battleResultModal.classList.add('hidden');
+    clearActiveBattleSnapshot();
+  }
+
+  applyScreenVisibility();
 
   if (isEquip) {
     equipMode = 'equip';
@@ -1803,6 +1932,7 @@ function setScreen(screen) {
     renderBattleSpeed();
     renderBattleTyping();
     renderBattleUnits();
+    saveActiveBattleSnapshot();
   }
 }
 
@@ -2044,6 +2174,7 @@ battleSpeedBtn.addEventListener('click', () => {
   playClickSound(profile.volume);
   battleSpeedIndex = (battleSpeedIndex + 1) % BATTLE_SPEEDS.length;
   renderBattleSpeed();
+  saveActiveBattleSnapshot();
 });
 
 battleTypingBox.addEventListener('click', () => {
@@ -2068,6 +2199,10 @@ window.addEventListener('keydown', (e) => {
     }
     if (!presenceModal.classList.contains('hidden')) {
       closePresenceModal();
+      return;
+    }
+    if (!nextBallGuideModal.classList.contains('hidden')) {
+      closeNextBallGuideModal();
       return;
     }
     if (!enemyGuideModal.classList.contains('hidden')) {
@@ -2265,6 +2400,238 @@ enemyGuideXBtn.addEventListener('click', closeEnemyGuideModal);
 enemyGuideCloseBtn.addEventListener('click', closeEnemyGuideModal);
 enemyGuideModal.addEventListener('click', (e) => {
   if (e.target === enemyGuideModal) closeEnemyGuideModal();
+});
+
+// Next Ball Guide Modal (📕)
+function renderNextBallGuideModal() {
+  const summary = getNextBallGuideSummary(
+    profile.ownedBalls,
+    profile.ballCounts,
+    profile.pityWins,
+    BALL_CATALOG
+  );
+
+  nextBallSummaryCard.innerHTML = '';
+  const head = document.createElement('div');
+  head.className = 'next-ball-target-head';
+
+  const titleEl = document.createElement('h3');
+  titleEl.className = 'guide-card-title';
+  titleEl.style.margin = '0';
+  titleEl.textContent = summary.nextLabel
+    ? `現在の目標：${summary.nextLabel}`
+    : '現在の目標：最高レアリティ到達';
+  head.appendChild(titleEl);
+
+  if (summary.nextRarity && RARITY_STYLES[summary.nextRarity]) {
+    const badge = document.createElement('span');
+    badge.className = 'next-ball-rarity-badge';
+    badge.style.backgroundColor = RARITY_STYLES[summary.nextRarity].cardBg;
+    badge.textContent = RARITY_STYLES[summary.nextRarity].label;
+    head.appendChild(badge);
+  }
+  nextBallSummaryCard.appendChild(head);
+
+  const statRows = document.createElement('div');
+  statRows.className = 'next-ball-stat-rows';
+
+  // Row 1: Next Rarity Spawn Probability
+  const probRow = document.createElement('div');
+  probRow.className = 'next-ball-stat-row';
+  const probTop = document.createElement('div');
+  probTop.className = 'next-ball-stat-top';
+  const probLabel = document.createElement('span');
+  probLabel.className = 'next-ball-stat-label';
+  probLabel.textContent = '次のレアリティが出現する確率';
+  const probVal = document.createElement('span');
+  probVal.className = 'next-ball-stat-value';
+  if (!summary.nextRarity) {
+    probVal.textContent = '最大';
+  } else if (!summary.isRarityImplemented) {
+    probVal.textContent = `準備中（予定 ${summary.baseChancePercent}%）`;
+  } else if (summary.isChanceUnlocked) {
+    probVal.textContent = `${summary.activeChancePercent}%`;
+  } else {
+    probVal.textContent = `0%（${summary.prevLabel} ${summary.prevOwnedCount}/6個）`;
+  }
+  probTop.appendChild(probLabel);
+  probTop.appendChild(probVal);
+  probRow.appendChild(probTop);
+
+  const probNote = document.createElement('p');
+  probNote.className = 'next-ball-stat-note';
+  if (!summary.nextRarity) {
+    probNote.textContent = 'すべてのレアリティに到達しています！';
+  } else if (!summary.isRarityImplemented) {
+    probNote.textContent = `${summary.nextLabel}のボールは今後のアップデートで追加予定です。`;
+  } else if (summary.isChanceUnlocked) {
+    probNote.textContent = `${summary.prevLabel}のボールで対戦すると、${summary.activeChancePercent}%の確率で「${summary.nextLabel}」が敵として出現します！`;
+  } else {
+    const needMore = Math.max(0, 6 - summary.prevOwnedCount);
+    probNote.textContent = `${summary.prevLabel}をあと${needMore}個集めると（合計6個以上）、${summary.baseChancePercent}%で「${summary.nextLabel}」が出現するようになります。`;
+  }
+  probRow.appendChild(probNote);
+  statRows.appendChild(probRow);
+
+  // Row 2: Guaranteed Wins Countdown (Shown from Rare onward!)
+  const winRow = document.createElement('div');
+  winRow.className = 'next-ball-stat-row';
+  const winTop = document.createElement('div');
+  winTop.className = 'next-ball-stat-top';
+  const winLabel = document.createElement('span');
+  winLabel.className = 'next-ball-stat-label';
+  winLabel.textContent = 'あと何勝で確定出現するか';
+  const winVal = document.createElement('span');
+  winVal.className = 'next-ball-stat-value';
+
+  if (summary.requiredWins === null) {
+    winVal.textContent = 'レアからカウント';
+    winTop.appendChild(winLabel);
+    winTop.appendChild(winVal);
+    winRow.appendChild(winTop);
+
+    const winNote = document.createElement('p');
+    winNote.className = 'next-ball-stat-note';
+    winNote.textContent = '確定出現までの勝利数カウントは、次のレアリティが「レア」（10勝・以降は5倍ずつ増加）から表示・カウントされます。';
+    winRow.appendChild(winNote);
+  } else {
+    if (summary.remainingWins === 0 && summary.isRarityImplemented) {
+      winVal.textContent = `あと 0勝（次の試合で確定！）`;
+    } else {
+      winVal.textContent = `あと ${summary.remainingWins}勝（${summary.currentWins} / ${summary.requiredWins}勝）`;
+    }
+    winTop.appendChild(winLabel);
+    winTop.appendChild(winVal);
+    winRow.appendChild(winTop);
+
+    const track = document.createElement('div');
+    track.className = 'next-ball-progress-track';
+    const fill = document.createElement('div');
+    const pct = Math.min(100, Math.round((summary.currentWins / summary.requiredWins) * 100));
+    fill.className = `next-ball-progress-fill ${summary.remainingWins === 0 ? 'next-ball-progress-fill-ready' : ''}`;
+    fill.style.width = `${pct}%`;
+    track.appendChild(fill);
+    winRow.appendChild(track);
+
+    const winNote = document.createElement('p');
+    winNote.className = 'next-ball-stat-note';
+    winNote.textContent = summary.isRarityImplemented
+      ? `対戦モードで勝つたびに進み、${summary.requiredWins}勝達成すると次の試合で「${summary.nextLabel}」が確定出現します。`
+      : `「${summary.nextLabel}」はレア（10勝）の5倍である ${summary.requiredWins}勝が確定ラインです（実装待ち）。`;
+    winRow.appendChild(winNote);
+  }
+  statRows.appendChild(winRow);
+  nextBallSummaryCard.appendChild(statRows);
+
+  // Full Tier List
+  nextBallTierList.innerHTML = '';
+  summary.tiers.forEach((tier) => {
+    const li = document.createElement('li');
+    li.className = 'next-ball-tier-item';
+
+    const top = document.createElement('div');
+    top.className = 'next-ball-tier-item-top';
+
+    const badge = document.createElement('span');
+    badge.className = 'next-ball-rarity-badge';
+    badge.style.backgroundColor = RARITY_STYLES[tier.targetRarity]?.cardBg || '#e2e8f0';
+    badge.textContent = tier.implemented ? tier.targetLabel : `${tier.targetLabel}（準備中）`;
+    top.appendChild(badge);
+
+    const chanceText = document.createElement('span');
+    chanceText.className = 'next-ball-stat-value';
+    chanceText.textContent = `確率 ${tier.chancePercent}%`;
+    top.appendChild(chanceText);
+    li.appendChild(top);
+
+    const cond = document.createElement('div');
+    cond.className = 'next-ball-tier-meta';
+    cond.textContent = `出現条件：${tier.sourceLabel}を${tier.unlockNeed}個以上所持（現在 ${tier.sourceCount}/${tier.unlockNeed}個）`;
+    li.appendChild(cond);
+
+    const pityLine = document.createElement('div');
+    pityLine.className = 'next-ball-tier-pity';
+    if (tier.requiredWins === null) {
+      pityLine.textContent = '勝利数による確定出現：なし（確率のみで出現）';
+    } else {
+      const scaleHint = tier.targetRarity === 'rare' ? '' : '（前のレアリティの5倍）';
+      pityLine.textContent = `確定出現：${tier.requiredWins}勝で出現${scaleHint} / あと ${tier.remainingWins}勝（${tier.currentWins}/${tier.requiredWins}勝）`;
+    }
+    li.appendChild(pityLine);
+
+    nextBallTierList.appendChild(li);
+  });
+}
+
+function openNextBallGuideModal() {
+  playOpenSound(profile.volume);
+  renderNextBallGuideModal();
+  nextBallGuideModal.classList.remove('hidden');
+}
+
+function closeNextBallGuideModal() {
+  if (nextBallGuideModal.classList.contains('hidden')) return;
+  playClickSound(profile.volume);
+  nextBallGuideModal.classList.add('hidden');
+}
+
+openNextBallGuideBtn.addEventListener('click', openNextBallGuideModal);
+nextBallGuideXBtn.addEventListener('click', closeNextBallGuideModal);
+nextBallGuideCloseBtn.addEventListener('click', closeNextBallGuideModal);
+nextBallGuideModal.addEventListener('click', (e) => {
+  if (e.target === nextBallGuideModal) closeNextBallGuideModal();
+});
+
+// Mid-Battle Resume Prompt Modal
+function openBattleResumeModal(restored) {
+  pendingResumeBattle = restored;
+  noticeModal.classList.add('hidden');
+
+  const st = restored.battleState;
+  const alivePlayers = st.playerTeam.filter((u) => !u.dead && !u.isWall).length;
+  const aliveEnemies = st.enemyTeam.filter((u) => !u.dead && !u.isWall).length;
+  const wordLabel = st.currentWord?.kana || 'タイピング中';
+  const typedCount = `${st.typedIndex}/${st.currentWord?.romaji?.length || 0}文字`;
+
+  battleResumeSummary.innerHTML = '';
+  const items = [
+    { label: '味方残りボール', value: `${alivePlayers}体` },
+    { label: '敵残りボール', value: `${aliveEnemies}体` },
+    { label: '現在の単語', value: `${wordLabel} (${typedCount})` },
+    { label: '入力済み単語数', value: `${st.wordsCompleted}語` },
+  ];
+  items.forEach((item) => {
+    const box = document.createElement('div');
+    box.className = 'battle-resume-stat';
+    const lbl = document.createElement('span');
+    lbl.className = 'battle-resume-stat-label';
+    lbl.textContent = item.label;
+    const val = document.createElement('span');
+    val.className = 'battle-resume-stat-value';
+    val.textContent = item.value;
+    box.appendChild(lbl);
+    box.appendChild(val);
+    battleResumeSummary.appendChild(box);
+  });
+
+  battleResumeModal.classList.remove('hidden');
+}
+
+battleResumeContinueBtn.addEventListener('click', () => {
+  if (!pendingResumeBattle) {
+    battleResumeModal.classList.add('hidden');
+    return;
+  }
+  playOpenSound(profile.volume);
+  resumeSavedBattle(pendingResumeBattle);
+});
+
+battleResumeDiscardBtn.addEventListener('click', () => {
+  playClickSound(profile.volume);
+  pendingResumeBattle = null;
+  clearActiveBattleSnapshot();
+  battleResumeModal.classList.add('hidden');
+  setScreen('home');
 });
 
 // Admin Crown Modal (👑)
@@ -2863,6 +3230,9 @@ function startPresenceLifecycle() {
 
 let didUnloadCurrentTab = false;
 function handleTabUnload() {
+  if (currentScreen === 'battle' && battleState && battleState.turn !== 'finished') {
+    saveActiveBattleSnapshot();
+  }
   if (didUnloadCurrentTab) return;
   didUnloadCurrentTab = true;
   const isLastTab = unregisterActiveTab();
@@ -2879,6 +3249,12 @@ presenceModal.addEventListener('click', (e) => {
 });
 
 document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    if (currentScreen === 'battle' && battleState && battleState.turn !== 'finished') {
+      saveActiveBattleSnapshot();
+    }
+    return;
+  }
   if (document.visibilityState === 'visible') {
     didUnloadCurrentTab = false;
     registerActiveTab();
@@ -2902,6 +3278,10 @@ window.addEventListener('pageshow', (e) => {
 // Initialize
 buildEditorDOM();
 renderHud();
+const savedBattleOnLoad = loadActiveBattleSnapshot();
+if (savedBattleOnLoad) {
+  openBattleResumeModal(savedBattleOnLoad);
+}
 ensureFirebase().catch(() => {});
 startPresenceLifecycle();
 fetchAdminStatus()

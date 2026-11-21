@@ -153,10 +153,21 @@
         </div>
 
         <nav class="mode-stack" aria-label="ゲームモード">
-          <button id="mode-vs-btn" type="button" class="arcade-btn mode-btn mode-btn-vs">
-            <span class="mode-btn-main">対戦モード</span>
-            <span class="mode-btn-sub">NPCとバトル</span>
-          </button>
+          <div class="mode-vs-row">
+            <button id="mode-vs-btn" type="button" class="arcade-btn mode-btn mode-btn-vs">
+              <span class="mode-btn-main">対戦モード</span>
+              <span class="mode-btn-sub">NPCとバトル</span>
+            </button>
+            <button
+              id="open-next-ball-guide-btn"
+              type="button"
+              class="arcade-btn mode-guide-book-btn"
+              aria-label="次のボールをゲットする方法を見る"
+              title="次のボールをゲットする方法"
+            >
+              <span aria-hidden="true">📕</span>
+            </button>
+          </div>
 
           <button type="button" class="arcade-btn mode-btn mode-btn-dev" data-dev-mode-btn>
             <span class="mode-btn-main">ストーリーモード</span>
@@ -956,6 +967,82 @@
         <div class="modal-footer modal-footer-center">
           <button id="presence-close-btn" type="button" class="arcade-btn btn-gold btn-close-notice">
             閉じる
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Next Ball Guide Modal (📕) -->
+    <div
+      id="next-ball-guide-modal"
+      class="modal-backdrop hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="next-ball-guide-title"
+    >
+      <div class="arcade-card enemy-guide-dialog">
+        <div class="modal-header modal-header-between">
+          <h2 id="next-ball-guide-title" class="modal-title arcade-outline-white">次のボールをゲットする方法</h2>
+          <button
+            id="next-ball-guide-x-btn"
+            type="button"
+            class="arcade-btn-sm btn-close-x"
+            aria-label="閉じる"
+          >
+            <svg viewBox="0 0 24 24" class="icon-svg" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 6 6 18" />
+              <path d="m6 6 12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div id="next-ball-guide-body" class="enemy-guide-body">
+          <section id="next-ball-summary-card" class="guide-card guide-card-accent" aria-label="現在の次のレアリティ状況"></section>
+
+          <section class="guide-card" aria-label="レアリティ別の出現確率と確定勝利数">
+            <h3 class="guide-card-title">レアリティ別 出現確率 &amp; 確定勝利数</h3>
+            <p class="guide-card-text">
+              手持ちのレアリティを<strong>6個以上</strong>集めると、次のレアリティの敵が確率で出現するようになります。
+              さらに<strong>レア以上</strong>が次の目標になると、勝利数による<strong>確定出現カウント</strong>（レアは10勝、以降は5倍ずつ増加）も進みます！
+            </p>
+            <ul id="next-ball-tier-list" class="next-ball-tier-list"></ul>
+          </section>
+        </div>
+
+        <div class="modal-footer modal-footer-center">
+          <button id="next-ball-guide-close-btn" type="button" class="arcade-btn btn-gold btn-close-notice">
+            閉じる
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mid-Battle Resume Prompt Modal -->
+    <div
+      id="battle-resume-modal"
+      class="modal-backdrop hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="battle-resume-modal-title"
+    >
+      <div class="arcade-card battle-resume-dialog">
+        <div class="modal-header">
+          <h2 id="battle-resume-modal-title" class="modal-title arcade-outline-white">まだバトルの途中だよ</h2>
+        </div>
+
+        <div class="battle-resume-body">
+          <p class="battle-resume-lead">
+            前回のバトルがまだ終わっていません。「続ける」を押すと、途中からバトルを再開できます！
+          </p>
+          <div id="battle-resume-summary" class="battle-resume-summary"></div>
+        </div>
+
+        <div class="modal-footer modal-footer-center battle-resume-footer">
+          <button id="battle-resume-continue-btn" type="button" class="arcade-btn btn-green">
+            続ける
+          </button>
+          <button id="battle-resume-discard-btn" type="button" class="arcade-btn btn-white">
+            やめてホームへ
           </button>
         </div>
       </div>
