@@ -767,7 +767,7 @@ body {
   align-items: end;
   gap: 16px;
   width: 100%;
-  max-width: 1060px;
+  max-width: 1360px;
   margin: 0 auto;
   padding: 0 16px 26px;
 }
@@ -2236,64 +2236,6 @@ body {
     min-width: 88px;
   }
 
-  /* Battle 5+ units: stay horizontal by shrinking size */
-  .territory-side-compact {
-    gap: 6px;
-  }
-
-  .territory-side-compact .battle-unit-sprite-wrap {
-    width: 44px;
-    height: 44px;
-  }
-
-  .territory-side-compact .battle-stat-plate {
-    min-width: 62px;
-    padding: 2px 4px 3px;
-  }
-
-  .territory-side-compact .battle-stat-lv {
-    font-size: 8px;
-  }
-
-  .territory-side-compact .battle-stat-nums {
-    gap: 4px;
-    font-size: 9.5px;
-  }
-
-  .territory-side-compact .battle-unit-front-tag {
-    padding: 1px 4px;
-    font-size: 8px;
-  }
-
-  .territory-side-dense {
-    gap: 4px;
-  }
-
-  .territory-side-dense .battle-unit-sprite-wrap {
-    width: 34px;
-    height: 34px;
-  }
-
-  .territory-side-dense .battle-stat-plate {
-    min-width: 48px;
-    padding: 2px 3px;
-    border-width: 1.5px;
-  }
-
-  .territory-side-dense .battle-stat-lv {
-    font-size: 7.5px;
-  }
-
-  .territory-side-dense .battle-stat-nums {
-    gap: 3px;
-    font-size: 8.5px;
-  }
-
-  .territory-side-dense .battle-unit-front-tag {
-    padding: 1px 3px;
-    font-size: 7.5px;
-  }
-
   .modal-footer {
     padding: 14px 24px;
   }
@@ -2332,102 +2274,47 @@ body {
   }
 
   .battle-territories {
-    gap: 8px;
-    padding: 0 8px 22px;
+    gap: 6px;
+    padding: 0 6px 22px;
   }
 
   .territory-left {
-    padding-right: 4px;
+    padding-right: 2px;
   }
 
   .territory-right {
-    padding-left: 4px;
+    padding-left: 2px;
   }
 
   .territory-side {
-    gap: 4px;
+    gap: 3px;
   }
 
   .battle-unit-sprite-wrap {
-    width: 34px;
-    height: 34px;
+    width: 32px;
+    height: 32px;
   }
 
   .battle-stat-plate {
-    min-width: 38px;
-    padding: 2px 3px;
+    min-width: 33px;
+    padding: 2px;
     border-width: 1.5px;
     border-radius: 6px;
   }
 
   .battle-stat-lv {
-    font-size: 7.5px;
+    font-size: 7px;
   }
 
   .battle-stat-nums {
     gap: 2px;
-    font-size: 8px;
+    font-size: 7.5px;
   }
 
   .battle-unit-front-tag {
-    padding: 1px 4px;
+    padding: 1px 3px;
     border-width: 1.5px;
-    font-size: 8px;
-  }
-
-  .territory-side-compact {
-    gap: 2px;
-  }
-
-  .territory-side-compact .battle-unit-sprite-wrap {
-    width: 24px;
-    height: 24px;
-  }
-
-  .territory-side-compact .battle-stat-plate {
-    min-width: 26px;
-    padding: 1px 2px;
-  }
-
-  .territory-side-compact .battle-stat-lv {
-    display: none;
-  }
-
-  .territory-side-compact .battle-stat-nums {
-    gap: 1px;
-    font-size: 6.5px;
-  }
-
-  .territory-side-compact .battle-unit-front-tag {
-    padding: 0 3px;
-    font-size: 7px;
-  }
-
-  .territory-side-dense {
-    gap: 2px;
-  }
-
-  .territory-side-dense .battle-unit-sprite-wrap {
-    width: 19px;
-    height: 19px;
-  }
-
-  .territory-side-dense .battle-stat-plate {
-    min-width: 20px;
-    padding: 1px;
-  }
-
-  .territory-side-dense .battle-stat-lv {
-    display: none;
-  }
-
-  .territory-side-dense .battle-stat-nums {
-    gap: 1px;
-    font-size: 6px;
-  }
-
-  .territory-side-dense .battle-unit-front-tag {
-    display: none;
+    font-size: 7.5px;
   }
 }
 

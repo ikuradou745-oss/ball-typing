@@ -1050,20 +1050,12 @@ function renderBattleUnits() {
   const firstLivingPlayer = battleState.playerTeam.find((u) => !u.dead);
   const firstAttackerPlayer = battleState.playerTeam.find((u) => !u.dead && !u.isWall);
 
-  const enemyCount = battleState.enemyTeam.length;
-  enemyTerritoryEl.classList.toggle('territory-side-compact', enemyCount >= 5 && enemyCount < 7);
-  enemyTerritoryEl.classList.toggle('territory-side-dense', enemyCount >= 7);
-
   enemyTerritoryEl.innerHTML = '';
   battleState.enemyTeam.forEach((enemy) => {
     const isFrontTank = Boolean(firstLivingEnemy && firstLivingEnemy.uid === enemy.uid);
     const isFrontAttacker = Boolean(firstAttackerEnemy && firstAttackerEnemy.uid === enemy.uid);
     enemyTerritoryEl.appendChild(createBattleUnitElement(enemy, true, isFrontTank, isFrontAttacker));
   });
-
-  const playerCount = battleState.playerTeam.length;
-  playerTerritoryEl.classList.toggle('territory-side-compact', playerCount >= 5 && playerCount < 7);
-  playerTerritoryEl.classList.toggle('territory-side-dense', playerCount >= 7);
 
   playerTerritoryEl.innerHTML = '';
   battleState.playerTeam.forEach((playerUnit) => {
