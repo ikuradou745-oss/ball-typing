@@ -7,8 +7,8 @@
     "isOnline": true,
     "lastLoginAt": "2026-11-21T01:21:31.292Z",
     "lastLoginAtMs": 1795224091292,
-    "lastSeenAt": "2026-11-21T01:38:17.789Z",
-    "lastSeenAtMs": 1795225097789,
+    "lastSeenAt": "2026-11-21T01:46:02.743Z",
+    "lastSeenAtMs": 1795225562743,
     "existsInFirestore": true
   }
 }

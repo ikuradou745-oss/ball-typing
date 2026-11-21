@@ -245,10 +245,38 @@
             <div class="battle-hud-strip">
               <span id="battle-turn-badge" class="battle-turn-badge">あなたのターン</span>
               <span id="typing-combo-badge" class="typing-combo-badge">攻撃倍率 ×1.0</span>
-              <span id="typing-shield-badge" class="typing-shield-badge hidden" aria-label="コンボシールド耐久">🛡 5/5</span>
             </div>
-            <div id="typing-kana" class="typing-kana"></div>
-            <div id="typing-romaji" class="typing-romaji" aria-live="polite"></div>
+            <div class="typing-word-with-shield">
+              <div class="typing-word-stack">
+                <div id="typing-kana" class="typing-kana"></div>
+                <div id="typing-romaji" class="typing-romaji" aria-live="polite"></div>
+              </div>
+              <div
+                id="typing-shield-emblem"
+                class="typing-shield-emblem typing-shield-emblem-inactive"
+                role="status"
+                aria-label="コンボシールド耐久 0"
+                title="コンボシールド耐久"
+              >
+                <svg viewBox="0 0 64 74" class="typing-shield-svg" aria-hidden="true">
+                  <path
+                    class="typing-shield-outer"
+                    d="M32 4 L58 14 V34 C58 51 46 63 32 70 C18 63 6 51 6 34 V14 Z"
+                  />
+                  <path
+                    class="typing-shield-inner"
+                    d="M32 9 L53 17.5 V34 C53 48 42.5 58 32 64.5 V9 Z"
+                  />
+                  <text
+                    id="typing-shield-value"
+                    x="32"
+                    y="46"
+                    text-anchor="middle"
+                    class="typing-shield-number"
+                  >0</text>
+                </svg>
+              </div>
+            </div>
             <input
               id="mobile-typing-input"
               type="text"

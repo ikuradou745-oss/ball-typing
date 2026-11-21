@@ -449,8 +449,7 @@ body {
 }
 
 .battle-turn-badge,
-.typing-combo-badge,
-.typing-shield-badge {
+.typing-combo-badge {
   padding: 2px 10px;
   border: 2px solid #000000;
   border-radius: 8px;
@@ -481,24 +480,112 @@ body {
   color: #000000;
 }
 
-.typing-shield-badge {
-  background-color: #38bdf8;
-  color: #082f49;
-  transition: transform 0.12s ease, background-color 0.15s ease;
+.typing-word-with-shield {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  max-width: 100%;
 }
 
-.typing-shield-badge-low {
-  background-color: #fb923c;
-  color: #431407;
+.typing-word-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
 }
 
-.typing-shield-badge-critical {
-  background-color: #fca5a5;
-  color: #7f1d1d;
+.typing-shield-emblem {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 48px;
+  height: 55px;
+  transition: transform 0.14s ease, opacity 0.18s ease;
+}
+
+.typing-shield-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.9));
+}
+
+.typing-shield-outer {
+  fill: #38bdf8;
+  stroke: #000000;
+  stroke-width: 4.5;
+  stroke-linejoin: round;
+}
+
+.typing-shield-inner {
+  fill: #7dd3fc;
+}
+
+.typing-shield-number {
+  font-family: var(--font-mono);
+  font-size: 28px;
+  font-weight: 900;
+  fill: #082f49;
+  font-variant-numeric: tabular-nums;
+  paint-order: stroke;
+  stroke: rgba(255, 255, 255, 0.55);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.typing-shield-emblem-inactive {
+  opacity: 0.34;
+}
+
+.typing-shield-emblem-inactive .typing-shield-svg {
+  filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.45));
+}
+
+.typing-shield-emblem-inactive .typing-shield-outer {
+  fill: #cbd5e1;
+}
+
+.typing-shield-emblem-inactive .typing-shield-inner {
+  fill: #e2e8f0;
+}
+
+.typing-shield-emblem-inactive .typing-shield-number {
+  fill: #475569;
+  stroke: none;
+}
+
+.typing-shield-emblem-low .typing-shield-outer {
+  fill: #fb923c;
+}
+
+.typing-shield-emblem-low .typing-shield-inner {
+  fill: #fdba74;
+}
+
+.typing-shield-emblem-low .typing-shield-number {
+  fill: #431407;
+}
+
+.typing-shield-emblem-critical .typing-shield-outer {
+  fill: #ef4444;
+}
+
+.typing-shield-emblem-critical .typing-shield-inner {
+  fill: #f87171;
+}
+
+.typing-shield-emblem-critical .typing-shield-number {
+  fill: #ffffff;
+  stroke: #7f1d1d;
+  stroke-width: 3;
 }
 
 .typing-shield-hit {
-  animation: typingShieldHit 0.24s ease-out;
+  animation: typingShieldHit 0.22s ease-out;
 }
 
 @keyframes typingShieldHit {
@@ -506,7 +593,7 @@ body {
     transform: scale(1.16);
   }
   50% {
-    transform: scale(0.92);
+    transform: scale(0.9);
   }
   100% {
     transform: scale(1);
@@ -687,8 +774,9 @@ body {
 
 .territory-side {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: flex-end;
+  min-width: 0;
   gap: 10px;
 }
 
@@ -708,6 +796,8 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
+  flex-shrink: 1;
+  min-width: 0;
   gap: 4px;
   transition:
     transform calc(180ms / var(--battle-speed, 1)) cubic-bezier(0.16, 1, 0.3, 1),
@@ -1187,12 +1277,32 @@ body {
   box-shadow: 0 0 0 3px rgba(49, 150, 226, 0.35);
 }
 
-.equipped-slots-row,
-.owned-balls-row {
+.equipped-slots-row {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
   align-items: stretch;
+}
+
+.owned-balls-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 12px;
+  align-items: stretch;
+  max-height: 336px;
+  padding: 4px 8px 8px 4px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.owned-balls-row .ball-card {
+  width: 100%;
+  min-width: 0;
+}
+
+.owned-balls-row .ball-empty-msg {
+  grid-column: 1 / -1;
 }
 
 .ball-card {
@@ -2098,6 +2208,20 @@ body {
     font-size: 22px;
   }
 
+  .typing-word-with-shield {
+    gap: 16px;
+  }
+
+  .typing-shield-emblem {
+    width: 56px;
+    height: 64px;
+  }
+
+  .owned-balls-row {
+    grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
+    max-height: 372px;
+  }
+
   .battle-territories {
     gap: 48px;
     padding: 0 32px 30px;
@@ -2112,8 +2236,198 @@ body {
     min-width: 88px;
   }
 
+  /* Battle 5+ units: stay horizontal by shrinking size */
+  .territory-side-compact {
+    gap: 6px;
+  }
+
+  .territory-side-compact .battle-unit-sprite-wrap {
+    width: 44px;
+    height: 44px;
+  }
+
+  .territory-side-compact .battle-stat-plate {
+    min-width: 62px;
+    padding: 2px 4px 3px;
+  }
+
+  .territory-side-compact .battle-stat-lv {
+    font-size: 8px;
+  }
+
+  .territory-side-compact .battle-stat-nums {
+    gap: 4px;
+    font-size: 9.5px;
+  }
+
+  .territory-side-compact .battle-unit-front-tag {
+    padding: 1px 4px;
+    font-size: 8px;
+  }
+
+  .territory-side-dense {
+    gap: 4px;
+  }
+
+  .territory-side-dense .battle-unit-sprite-wrap {
+    width: 34px;
+    height: 34px;
+  }
+
+  .territory-side-dense .battle-stat-plate {
+    min-width: 48px;
+    padding: 2px 3px;
+    border-width: 1.5px;
+  }
+
+  .territory-side-dense .battle-stat-lv {
+    font-size: 7.5px;
+  }
+
+  .territory-side-dense .battle-stat-nums {
+    gap: 3px;
+    font-size: 8.5px;
+  }
+
+  .territory-side-dense .battle-unit-front-tag {
+    padding: 1px 3px;
+    font-size: 7.5px;
+  }
+
   .modal-footer {
     padding: 14px 24px;
+  }
+}
+
+@media (max-width: 639px) {
+  .battle-top-bar {
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .battle-top-left {
+    display: none;
+  }
+
+  .battle-typing-box {
+    padding: 2px 4px;
+  }
+
+  .typing-kana {
+    font-size: 18px;
+  }
+
+  .typing-romaji {
+    font-size: 15px;
+  }
+
+  .typing-word-with-shield {
+    gap: 8px;
+  }
+
+  .typing-shield-emblem {
+    width: 44px;
+    height: 50px;
+  }
+
+  .battle-territories {
+    gap: 8px;
+    padding: 0 8px 22px;
+  }
+
+  .territory-left {
+    padding-right: 4px;
+  }
+
+  .territory-right {
+    padding-left: 4px;
+  }
+
+  .territory-side {
+    gap: 4px;
+  }
+
+  .battle-unit-sprite-wrap {
+    width: 34px;
+    height: 34px;
+  }
+
+  .battle-stat-plate {
+    min-width: 38px;
+    padding: 2px 3px;
+    border-width: 1.5px;
+    border-radius: 6px;
+  }
+
+  .battle-stat-lv {
+    font-size: 7.5px;
+  }
+
+  .battle-stat-nums {
+    gap: 2px;
+    font-size: 8px;
+  }
+
+  .battle-unit-front-tag {
+    padding: 1px 4px;
+    border-width: 1.5px;
+    font-size: 8px;
+  }
+
+  .territory-side-compact {
+    gap: 2px;
+  }
+
+  .territory-side-compact .battle-unit-sprite-wrap {
+    width: 24px;
+    height: 24px;
+  }
+
+  .territory-side-compact .battle-stat-plate {
+    min-width: 26px;
+    padding: 1px 2px;
+  }
+
+  .territory-side-compact .battle-stat-lv {
+    display: none;
+  }
+
+  .territory-side-compact .battle-stat-nums {
+    gap: 1px;
+    font-size: 6.5px;
+  }
+
+  .territory-side-compact .battle-unit-front-tag {
+    padding: 0 3px;
+    font-size: 7px;
+  }
+
+  .territory-side-dense {
+    gap: 2px;
+  }
+
+  .territory-side-dense .battle-unit-sprite-wrap {
+    width: 19px;
+    height: 19px;
+  }
+
+  .territory-side-dense .battle-stat-plate {
+    min-width: 20px;
+    padding: 1px;
+  }
+
+  .territory-side-dense .battle-stat-lv {
+    display: none;
+  }
+
+  .territory-side-dense .battle-stat-nums {
+    gap: 1px;
+    font-size: 6px;
+  }
+
+  .territory-side-dense .battle-unit-front-tag {
+    display: none;
   }
 }
 
@@ -2848,6 +3162,8 @@ body {
   .battle-float-popup,
   .battle-projectile,
   .matchmaking-overlay,
+  .typing-shield-emblem,
+  .typing-shield-hit,
   .color-swatch,
   .is-shaking {
     transition: none;

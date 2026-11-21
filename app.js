@@ -510,7 +510,8 @@ const battleSpeedBtn = document.getElementById('battle-speed-btn');
 const battleTypingBox = document.getElementById('battle-typing-box');
 const battleTurnBadge = document.getElementById('battle-turn-badge');
 const typingComboBadge = document.getElementById('typing-combo-badge');
-const typingShieldBadge = document.getElementById('typing-shield-badge');
+const typingShieldEmblem = document.getElementById('typing-shield-emblem');
+const typingShieldValue = document.getElementById('typing-shield-value');
 const typingKanaEl = document.getElementById('typing-kana');
 const typingRomajiEl = document.getElementById('typing-romaji');
 const mobileTypingInput = document.getElementById('mobile-typing-input');
@@ -1049,12 +1050,20 @@ function renderBattleUnits() {
   const firstLivingPlayer = battleState.playerTeam.find((u) => !u.dead);
   const firstAttackerPlayer = battleState.playerTeam.find((u) => !u.dead && !u.isWall);
 
+  const enemyCount = battleState.enemyTeam.length;
+  enemyTerritoryEl.classList.toggle('territory-side-compact', enemyCount >= 5 && enemyCount < 7);
+  enemyTerritoryEl.classList.toggle('territory-side-dense', enemyCount >= 7);
+
   enemyTerritoryEl.innerHTML = '';
   battleState.enemyTeam.forEach((enemy) => {
     const isFrontTank = Boolean(firstLivingEnemy && firstLivingEnemy.uid === enemy.uid);
     const isFrontAttacker = Boolean(firstAttackerEnemy && firstAttackerEnemy.uid === enemy.uid);
     enemyTerritoryEl.appendChild(createBattleUnitElement(enemy, true, isFrontTank, isFrontAttacker));
   });
+
+  const playerCount = battleState.playerTeam.length;
+  playerTerritoryEl.classList.toggle('territory-side-compact', playerCount >= 5 && playerCount < 7);
+  playerTerritoryEl.classList.toggle('territory-side-dense', playerCount >= 7);
 
   playerTerritoryEl.innerHTML = '';
   battleState.playerTeam.forEach((playerUnit) => {
@@ -1094,19 +1103,20 @@ function renderBattleHudStrip() {
       : `攻撃倍率 ×${mult.toFixed(1)}`;
   typingComboBadge.classList.toggle('typing-combo-badge-active', battleState.perfectStreak > 0);
 
-  if (typingShieldBadge) {
-    const showShield = battleState.perfectStreak > 0 && battleState.comboShield > 0;
-    typingShieldBadge.classList.toggle('hidden', !showShield);
-    if (showShield) {
-      typingShieldBadge.textContent = `🛡 ${battleState.comboShield}/${TYPING_SHIELD_MAX}`;
-      typingShieldBadge.classList.toggle('typing-shield-badge-low', battleState.comboShield === 2);
-      typingShieldBadge.classList.toggle(
-        'typing-shield-badge-critical',
-        battleState.comboShield === 1
-      );
-    } else {
-      typingShieldBadge.classList.remove('typing-shield-badge-low', 'typing-shield-badge-critical');
-    }
+  if (typingShieldEmblem && typingShieldValue) {
+    const isActive = battleState.perfectStreak > 0 && battleState.comboShield > 0;
+    const shieldNum = isActive ? battleState.comboShield : 0;
+    typingShieldValue.textContent = String(shieldNum);
+    typingShieldEmblem.setAttribute(
+      'aria-label',
+      isActive ? `コンボシールド耐久 ${shieldNum} / ${TYPING_SHIELD_MAX}` : 'コンボシールド未発動'
+    );
+    typingShieldEmblem.classList.toggle('typing-shield-emblem-inactive', !isActive);
+    typingShieldEmblem.classList.toggle('typing-shield-emblem-low', isActive && shieldNum === 2);
+    typingShieldEmblem.classList.toggle(
+      'typing-shield-emblem-critical',
+      isActive && shieldNum === 1
+    );
   }
 }
 
@@ -1567,10 +1577,10 @@ function handleTypingChar(rawChar) {
     Object.assign(battleState, mistake.state);
     playErrorSound(profile.volume);
     renderBattleHudStrip();
-    if (mistake.outcome === 'shield_damaged' && typingShieldBadge) {
-      typingShieldBadge.classList.remove('typing-shield-hit');
-      void typingShieldBadge.offsetWidth;
-      typingShieldBadge.classList.add('typing-shield-hit');
+    if (mistake.outcome !== 'no_shield_miss' && typingShieldEmblem) {
+      typingShieldEmblem.classList.remove('typing-shield-hit');
+      void typingShieldEmblem.offsetWidth;
+      typingShieldEmblem.classList.add('typing-shield-hit');
     }
     battleTypingBox.classList.add('typing-error-flash');
     if (typingErrorTimer) clearTimeout(typingErrorTimer);
