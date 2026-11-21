@@ -9,6 +9,7 @@ import {
   doc,
   getDocs,
   getFirestore,
+  initializeFirestore,
   query,
   serverTimestamp,
   setDoc,
@@ -69,9 +70,19 @@ function initFirestoreClient() {
     if (!fs.existsSync(cfgPath)) return null;
     const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
     const fbApp = initializeApp(cfg, 'server-sync');
-    return cfg.firestoreDatabaseId
-      ? getFirestore(fbApp, cfg.firestoreDatabaseId)
-      : getFirestore(fbApp);
+    try {
+      return cfg.firestoreDatabaseId
+        ? initializeFirestore(
+            fbApp,
+            { experimentalAutoDetectLongPolling: true },
+            cfg.firestoreDatabaseId
+          )
+        : initializeFirestore(fbApp, { experimentalAutoDetectLongPolling: true });
+    } catch {
+      return cfg.firestoreDatabaseId
+        ? getFirestore(fbApp, cfg.firestoreDatabaseId)
+        : getFirestore(fbApp);
+    }
   } catch (err) {
     console.error('Failed to initialize server Firestore client:', err);
     return null;
@@ -724,47 +735,57 @@ app.get('/api/surveys', async (req, res) => {
   res.json({ ok: true, items: surveys });
 });
 
+function resolvePresenceDocId(rawPresenceId, fallbackVisitorId = '') {
+  if (typeof rawPresenceId === 'string' && /^[a-f0-9]{24}$/.test(rawPresenceId.trim())) {
+    return rawPresenceId.trim();
+  }
+  return fallbackVisitorId;
+}
+
 // Real-Time Presence (Online + Daily JST Login Reset at 00:00 JST)
 app.get('/api/presence', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   const existingVisitor = getExistingVisitorFromRequest(req);
-  const map = await loadPresenceMap();
+  const headerPresenceId = resolvePresenceDocId(req.get('x-presence-id'), '');
+  const selfId = headerPresenceId || existingVisitor?.visitorId || '';
+  const map = await loadPresenceMap(true);
   const records = Object.values(map);
   const serverNowMs = Date.now();
-  const split = splitPresenceRecords(
-    records,
-    serverNowMs,
-    existingVisitor?.visitorId || ''
-  );
+  const split = splitPresenceRecords(records, serverNowMs, selfId);
   res.json({ ok: true, serverNowMs, records, ...split });
 });
 
 app.post('/api/presence/heartbeat', async (req, res) => {
   const { visitorId, visitorKey } = getOrIssueVisitor(req, res);
+  const presenceDocId = resolvePresenceDocId(req.body?.presenceId, visitorId);
   const username = sanitizePresenceUsername(req.body?.username);
   const isAdminVerified = await isAdminRequestAsync(req);
   const nowMs = Date.now();
   const dayKey = getJstDateParts(nowMs).dayKey;
   const nowIso = new Date(nowMs).toISOString();
 
-  const existingMap = await loadPresenceMap();
-  const existingDoc = existingMap[visitorId];
+  let existingMap = await loadPresenceMap();
+  if (!existingMap[presenceDocId]) {
+    existingMap = await loadPresenceMap(true);
+  }
+  const existingDoc = existingMap[presenceDocId];
+  let firestoreSynced = false;
 
   if (firestoreDb) {
     try {
       const batch = writeBatch(firestoreDb);
-      const gateRef = doc(firestoreDb, 'presenceGates', visitorId);
-      const presenceRef = doc(firestoreDb, 'presence', visitorId);
+      const gateRef = doc(firestoreDb, 'presenceGates', presenceDocId);
+      const presenceRef = doc(firestoreDb, 'presence', presenceDocId);
 
       batch.set(gateRef, {
-        visitorId,
+        visitorId: presenceDocId,
         serverAuth: FIRESTORE_SERVER_AUTH,
         updatedAt: serverTimestamp(),
       });
 
       if (!existingDoc || !existingDoc.existsInFirestore) {
         batch.set(presenceRef, {
-          visitorId,
+          visitorId: presenceDocId,
           username,
           isAdminVerified,
           dayKey,
@@ -793,13 +814,14 @@ app.post('/api/presence/heartbeat', async (req, res) => {
 
       await batch.commit();
       presenceCache = { fetchedAt: 0, map: null };
+      firestoreSynced = true;
     } catch (err) {
       console.error('Failed to persist presence heartbeat in Firestore:', err);
     }
   }
 
   const localPresence = readJsonObject(PRESENCE_FILE);
-  const prevLocal = localPresence[visitorId];
+  const prevLocal = localPresence[presenceDocId];
   const lastLoginAt =
     existingDoc && existingDoc.dayKey === dayKey && existingDoc.lastLoginAt
       ? existingDoc.lastLoginAt
@@ -814,7 +836,7 @@ app.post('/api/presence/heartbeat', async (req, res) => {
         : nowMs;
 
   const record = {
-    visitorId,
+    visitorId: presenceDocId,
     username,
     isAdminVerified,
     dayKey,
@@ -823,12 +845,20 @@ app.post('/api/presence/heartbeat', async (req, res) => {
     lastLoginAtMs,
     lastSeenAt: nowIso,
     lastSeenAtMs: nowMs,
-    existsInFirestore: Boolean(existingDoc?.existsInFirestore || firestoreDb),
+    existsInFirestore: Boolean(existingDoc?.existsInFirestore || firestoreSynced),
   };
-  localPresence[visitorId] = record;
+  localPresence[presenceDocId] = record;
   writeJsonAtomic(PRESENCE_FILE, localPresence);
 
-  res.json({ ok: true, serverNowMs: nowMs, visitorId, visitorKey, dayKey, record });
+  res.json({
+    ok: true,
+    serverNowMs: nowMs,
+    visitorId: presenceDocId,
+    visitorKey,
+    dayKey,
+    firestoreSynced,
+    record,
+  });
 });
 
 app.post('/api/presence/leave', async (req, res) => {
@@ -843,24 +873,31 @@ app.post('/api/presence/leave', async (req, res) => {
   const bodyToken = typeof parsedBody?.visitorKey === 'string' ? parsedBody.visitorKey : '';
   const candidate = req.get('x-visitor-key') || parseCookies(req).bt_visitor || bodyToken;
   const parsed = verifySignedPayload(candidate);
-  if (!parsed || typeof parsed.vid !== 'string' || !/^[a-f0-9]{24}$/.test(parsed.vid)) {
+  const signedVisitorId =
+    parsed && typeof parsed.vid === 'string' && /^[a-f0-9]{24}$/.test(parsed.vid)
+      ? parsed.vid
+      : '';
+  const presenceDocId = resolvePresenceDocId(parsedBody?.presenceId, signedVisitorId);
+  if (!presenceDocId) {
     res.json({ ok: true });
     return;
   }
 
-  const visitorId = parsed.vid;
-  const existingMap = await loadPresenceMap();
-  const existingDoc = existingMap[visitorId];
+  let existingMap = await loadPresenceMap();
+  if (!existingMap[presenceDocId]) {
+    existingMap = await loadPresenceMap(true);
+  }
+  const existingDoc = existingMap[presenceDocId];
 
   if (firestoreDb && existingDoc?.existsInFirestore) {
     try {
       const batch = writeBatch(firestoreDb);
-      batch.set(doc(firestoreDb, 'presenceGates', visitorId), {
-        visitorId,
+      batch.set(doc(firestoreDb, 'presenceGates', presenceDocId), {
+        visitorId: presenceDocId,
         serverAuth: FIRESTORE_SERVER_AUTH,
         updatedAt: serverTimestamp(),
       });
-      batch.update(doc(firestoreDb, 'presence', visitorId), {
+      batch.update(doc(firestoreDb, 'presence', presenceDocId), {
         isOnline: false,
         lastSeenAt: serverTimestamp(),
       });
@@ -872,10 +909,10 @@ app.post('/api/presence/leave', async (req, res) => {
   }
 
   const localPresence = readJsonObject(PRESENCE_FILE);
-  if (localPresence[visitorId]) {
-    localPresence[visitorId].isOnline = false;
-    localPresence[visitorId].lastSeenAt = new Date().toISOString();
-    localPresence[visitorId].lastSeenAtMs = Date.now();
+  if (localPresence[presenceDocId]) {
+    localPresence[presenceDocId].isOnline = false;
+    localPresence[presenceDocId].lastSeenAt = new Date().toISOString();
+    localPresence[presenceDocId].lastSeenAtMs = Date.now();
     writeJsonAtomic(PRESENCE_FILE, localPresence);
   }
 

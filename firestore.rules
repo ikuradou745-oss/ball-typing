@@ -201,20 +201,22 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Real-time online & daily JST login presence (writes gated by presenceGates atomic batch)
+    // Real-time online & daily JST login presence (server batch OR unprivileged browser fallback)
     match /presence/{visitorId} {
       allow get: if false;
       allow list: if resource.data.presenceScope == 'public_lobby';
       allow create: if isValidId(visitorId) &&
         isValidPresence(incoming(), visitorId) &&
         incoming().lastLoginAt == request.time &&
-        isPresenceGateSynchronized(visitorId);
+        (isPresenceGateSynchronized(visitorId) || incoming().isAdminVerified == false);
       allow update: if isValidId(visitorId) &&
         isValidPresence(incoming(), visitorId) &&
         incoming().diff(existing()).affectedKeys().hasOnly(['username', 'isAdminVerified', 'dayKey', 'isOnline', 'lastLoginAt', 'lastSeenAt']) &&
         incoming().visitorId == existing().visitorId &&
         incoming().presenceScope == existing().presenceScope &&
-        isPresenceGateSynchronized(visitorId);
+        ((incoming().dayKey == existing().dayKey && incoming().lastLoginAt == existing().lastLoginAt) ||
+          (incoming().dayKey != existing().dayKey && incoming().lastLoginAt == request.time)) &&
+        (isPresenceGateSynchronized(visitorId) || incoming().isAdminVerified == existing().isAdminVerified);
       allow delete: if false;
     }
   }

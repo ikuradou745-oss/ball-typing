@@ -850,6 +850,14 @@ body {
   filter: drop-shadow(0 0 8px #38bdf8) contrast(1.1);
 }
 
+.battle-unit-laser-charged .battle-unit-sprite-wrap {
+  filter: drop-shadow(0 0 10px #22d3ee) brightness(1.12);
+}
+
+.battle-unit-parry-ready .battle-unit-sprite-wrap {
+  filter: drop-shadow(0 0 9px #f6c116) contrast(1.08);
+}
+
 .battle-unit-status-row {
   display: flex;
   flex-wrap: wrap;
@@ -872,6 +880,21 @@ body {
 .battle-chip-shield {
   background-color: #bae6fd;
   color: #0369a1;
+}
+
+.battle-chip-laser {
+  background-color: #cffafe;
+  color: #0e7490;
+}
+
+.battle-chip-parry {
+  background-color: #fef08a;
+  color: #854d0e;
+}
+
+.battle-chip-pierce {
+  background-color: #e0f2fe;
+  color: #075985;
 }
 
 .battle-chip-debuff {
@@ -994,6 +1017,16 @@ body {
 
 .battle-float-boom {
   background-color: #f97316;
+  color: #ffffff;
+}
+
+.battle-float-parry {
+  background-color: #fde047;
+  color: #0f172a;
+}
+
+.battle-float-laser {
+  background-color: #0ea5e9;
   color: #ffffff;
 }
 
@@ -1356,16 +1389,16 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 4px;
+  gap: 2px;
   width: 100%;
 }
 
 .ball-tag {
-  padding: 1px 4px;
+  padding: 1px 3.5px;
   border: 1.5px solid #000000;
   border-radius: 4px;
   background-color: #ffffff;
-  font-size: 9px;
+  font-size: 8.5px;
   font-weight: 900;
   line-height: 1.25;
   color: #0f172a;
@@ -1530,6 +1563,16 @@ body {
   font-weight: 900;
   color: #0f172a;
   white-space: nowrap;
+}
+
+.ball-detail-tag-attr {
+  background-color: #cffafe;
+  color: #0e7490;
+}
+
+.ball-tag-attr {
+  background-color: #cffafe;
+  color: #0e7490;
 }
 
 .ball-detail-stats-grid {

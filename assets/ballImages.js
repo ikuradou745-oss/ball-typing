@@ -145,6 +145,67 @@ export const WOOD_WALL_SVG = `
   </svg>
 `.trim();
 
+function createLaserBallSvg() {
+  return `
+    <svg viewBox="0 0 64 64" class="ball-vector-svg" aria-hidden="true">
+      <circle cx="32" cy="32" r="27" fill="#0EA5E9" stroke="#000000" stroke-width="4" />
+      <path d="M10 38 A24 24 0 0 0 54 38 A26 22 0 0 1 10 38 Z" fill="#0369A1" opacity="0.58" />
+      <circle cx="32" cy="32" r="19" fill="#38BDF8" opacity="0.48" />
+      <!-- Metallic emitter rings -->
+      <circle cx="32" cy="32" r="13" fill="#0F172A" stroke="#000000" stroke-width="2.5" />
+      <circle cx="32" cy="32" r="8.5" fill="#22D3EE" stroke="#E0F2FE" stroke-width="2" />
+      <circle cx="32" cy="32" r="4" fill="#FFFFFF" />
+      <!-- Laser beam flares -->
+      <path d="M8 32 L18 32 M46 32 L58 32" stroke="#BAE6FD" stroke-width="4" stroke-linecap="round" />
+      <path d="M47 26 L57 22 M47 38 L57 42" stroke="#7DD3FC" stroke-width="2.5" stroke-linecap="round" />
+      <ellipse cx="20" cy="15" rx="6.8" ry="3.2" transform="rotate(-25 20 15)" fill="#FFFFFF" opacity="0.86" />
+    </svg>
+  `.trim();
+}
+
+function createSwordBallSvg() {
+  return `
+    <svg viewBox="0 0 64 64" class="ball-vector-svg" aria-hidden="true">
+      <circle cx="30" cy="34" r="24" fill="#64748B" stroke="#000000" stroke-width="4" />
+      <path d="M10 40 A21 21 0 0 0 50 40 A23 19 0 0 1 10 40 Z" fill="#334155" opacity="0.62" />
+      <circle cx="26" cy="28" r="15" fill="#CBD5E1" opacity="0.42" />
+      <!-- Knight visor slit -->
+      <path d="M16 33 Q30 37 44 31" fill="none" stroke="#0F172A" stroke-width="3.5" stroke-linecap="round" />
+      <!-- Diagonal gleaming sword across ball -->
+      <g transform="rotate(-38 35 29)">
+        <polygon points="35,4 39,14 38,38 32,38 31,14" fill="#E0F2FE" stroke="#000000" stroke-width="2.8" stroke-linejoin="round" />
+        <line x1="35" y1="10" x2="35" y2="36" stroke="#38BDF8" stroke-width="1.8" />
+        <rect x="27" y="37" width="16" height="4.5" rx="2" fill="#F6C116" stroke="#000000" stroke-width="2.2" />
+        <rect x="33" y="41.5" width="4" height="8" rx="1.5" fill="#92400E" stroke="#000000" stroke-width="2" />
+        <circle cx="35" cy="51" r="3" fill="#F6C116" stroke="#000000" stroke-width="2" />
+      </g>
+      <ellipse cx="19" cy="19" rx="5.5" ry="2.8" transform="rotate(-24 19 19)" fill="#FFFFFF" opacity="0.82" />
+    </svg>
+  `.trim();
+}
+
+function createBandageBallSvg() {
+  return `
+    <svg viewBox="0 0 64 64" class="ball-vector-svg" aria-hidden="true">
+      <circle cx="32" cy="32" r="27" fill="#FDE68A" stroke="#000000" stroke-width="4" />
+      <path d="M10 38 A24 24 0 0 0 54 38 A26 22 0 0 1 10 38 Z" fill="#F59E0B" opacity="0.34" />
+      <circle cx="27" cy="25" r="17" fill="#FEF3C7" opacity="0.55" />
+      <!-- Crossed adhesive bandages -->
+      <g transform="rotate(-28 32 32)">
+        <rect x="13" y="24" width="38" height="16" rx="7" fill="#FFFBEB" stroke="#000000" stroke-width="3" />
+        <rect x="24" y="25.5" width="16" height="13" rx="2" fill="#FDBA74" opacity="0.72" />
+        <circle cx="19" cy="29" r="1.2" fill="#92400E" />
+        <circle cx="19" cy="35" r="1.2" fill="#92400E" />
+        <circle cx="45" cy="29" r="1.2" fill="#92400E" />
+        <circle cx="45" cy="35" r="1.2" fill="#92400E" />
+      </g>
+      <!-- Green medical healing cross -->
+      <path d="M29.5 27 H34.5 V30.5 H38 V35.5 H34.5 V39 H29.5 V35.5 H26 V30.5 H29.5 Z" fill="#22C55E" stroke="#000000" stroke-width="1.8" stroke-linejoin="round" />
+      <ellipse cx="20.5" cy="15.5" rx="6.8" ry="3.2" transform="rotate(-26 20.5 15.5)" fill="#FFFFFF" opacity="0.86" />
+    </svg>
+  `.trim();
+}
+
 function createRivalBallSvg() {
   return `
     <svg viewBox="0 0 64 64" class="ball-vector-svg" aria-hidden="true">
@@ -166,6 +227,9 @@ export const BALL_CATALOG = {
     level: 1,
     hp: 10,
     atk: 1,
+    attributes: [],
+    piercing: false,
+    isPhysical: true,
     abilityTitle: '特殊能力',
     ability: '1度だけ死亡したとき、HPを最大HPの半分にして復活する。',
     svg: createSpongeBallSvg(),
@@ -177,6 +241,9 @@ export const BALL_CATALOG = {
     level: 1,
     hp: 12,
     atk: 0.8,
+    attributes: [],
+    piercing: false,
+    isPhysical: true,
     abilityTitle: '特殊能力',
     ability: '2回に1度、攻撃する際にダメージを1.5倍増加させます。',
     svg: createRubberBallSvg(),
@@ -188,6 +255,9 @@ export const BALL_CATALOG = {
     level: 1,
     hp: 8,
     atk: 0.7,
+    attributes: [],
+    piercing: false,
+    isPhysical: true,
     abilityTitle: '特殊能力',
     ability: '死亡時に膨らんで爆発し、攻撃力の3倍のダメージを与えます。',
     svg: createPlasticBallSvg(),
@@ -199,6 +269,9 @@ export const BALL_CATALOG = {
     level: 1,
     hp: 12,
     atk: 1,
+    attributes: [],
+    piercing: false,
+    isPhysical: true,
     abilityTitle: '特殊能力',
     ability: '攻撃時に3回に1度、特大ジャンプで攻撃し、相手の攻撃力を2ターン75%（-25%）にする。',
     svg: createSuperBallSvg(),
@@ -210,6 +283,9 @@ export const BALL_CATALOG = {
     level: 1,
     hp: 15,
     atk: 0.5,
+    attributes: [],
+    piercing: false,
+    isPhysical: true,
     abilityTitle: '特殊能力',
     ability: '3ターンに1度「固まる」状態になり、受けるダメージを半分カットできる（そのターンは攻撃できない）。',
     svg: createStoneBallSvg(),
@@ -221,6 +297,9 @@ export const BALL_CATALOG = {
     level: 1,
     hp: 10,
     atk: 1.4,
+    attributes: [],
+    piercing: false,
+    isPhysical: true,
     abilityTitle: '特殊能力',
     ability: '4ターンに1度「しげみ」攻撃を行い、相手は2ターン、攻撃を50%で外すようになる。',
     svg: createGrassBallSvg(),
@@ -232,9 +311,54 @@ export const BALL_CATALOG = {
     level: 1,
     hp: 9,
     atk: 1.1,
+    attributes: [],
+    piercing: false,
+    isPhysical: true,
     abilityTitle: '特殊能力',
     ability: '死亡時、最大HPの半分のHPを持つ壁を召喚する。（味方の先頭のボールは動ける）',
     svg: createWoodBallSvg(),
+  },
+  laser_ball: {
+    id: 'laser_ball',
+    name: 'レーザーボール',
+    rarity: 'rare',
+    level: 1,
+    hp: 15,
+    atk: 1.5,
+    attributes: ['貫通'],
+    piercing: true,
+    isPhysical: false,
+    abilityTitle: '特殊能力（属性：貫通）',
+    ability: '3回に1度攻撃せずにレーザーを貯めて、次の攻撃のダメージが2.5倍になる。レーザーは物理攻撃ではないため、パリィを無視して貫通する。',
+    svg: createLaserBallSvg(),
+  },
+  sword_ball: {
+    id: 'sword_ball',
+    name: 'ソードボール',
+    rarity: 'rare',
+    level: 1,
+    hp: 12,
+    atk: 1.7,
+    attributes: [],
+    piercing: false,
+    isPhysical: true,
+    abilityTitle: '特殊能力',
+    ability: '4回に1度、相手の物理攻撃をパリィして受けたダメージの半分を相手に跳ね返す。（「貫通」属性や物理以外の攻撃はパリィできない）',
+    svg: createSwordBallSvg(),
+  },
+  bandage_ball: {
+    id: 'bandage_ball',
+    name: '絆創膏ボール',
+    rarity: 'rare',
+    level: 1,
+    hp: 16,
+    atk: 0.9,
+    attributes: [],
+    piercing: false,
+    isPhysical: true,
+    abilityTitle: '特殊能力',
+    ability: '4ターンに1度、自分のHPを最大HPの18%回復できる（最大8まで）。また、先頭にいない場合、6ターンに1度、味方のHPを15%回復できる。',
+    svg: createBandageBallSvg(),
   },
 };
 

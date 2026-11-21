@@ -8,6 +8,9 @@ import {
   initializeFirestore,
   onSnapshot,
   query,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
   where,
 } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
 import {
@@ -41,6 +44,7 @@ export {
 const ADMIN_WEB_KEY_STORAGE = 'ball_typing_admin_key_v1';
 const ADMIN_CHANNEL_STORAGE = 'ball_typing_admin_channel_v1';
 const VISITOR_WEB_KEY_STORAGE = 'ball_typing_visitor_key_v1';
+const PRESENCE_ID_STORAGE = 'ball_typing_presence_id_v1';
 const SURVEY_STATE_STORAGE = 'ball_typing_survey_state_v1';
 const OPEN_TABS_STORAGE = 'ball_typing_open_tabs_v1';
 const TAB_ID_SESSION_KEY = 'ball_typing_tab_id_v1';
@@ -59,6 +63,58 @@ let dbInstance = null;
 let initPromise = null;
 let connectionTested = false;
 let serverClockOffsetMs = 0;
+let memoryPresenceId = '';
+let heartbeatInFlight = null;
+let queuedHeartbeatUsername = null;
+let knownPresenceExistsInFirestore = false;
+let knownPresenceDayKey = '';
+let knownPresenceIsAdminVerified = false;
+let knownPresenceLastLoginTs = null;
+
+function generateRandomHexId24() {
+  try {
+    const bytes = new Uint8Array(12);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  } catch {
+    let out = '';
+    for (let i = 0; i < 24; i++) {
+      out += Math.floor(Math.random() * 16).toString(16);
+    }
+    return out;
+  }
+}
+
+export function getOrCreateClientPresenceId() {
+  const existing = readStorageKey(PRESENCE_ID_STORAGE);
+  if (/^[a-f0-9]{24}$/.test(existing)) {
+    memoryPresenceId = existing;
+    return existing;
+  }
+  if (/^[a-f0-9]{24}$/.test(memoryPresenceId)) {
+    writeStorageKey(PRESENCE_ID_STORAGE, memoryPresenceId);
+    return memoryPresenceId;
+  }
+  const token = readStorageKey(VISITOR_WEB_KEY_STORAGE);
+  if (token && token.includes('.')) {
+    try {
+      const encoded = token.split('.')[0].replace(/-/g, '+').replace(/_/g, '/');
+      const pad = encoded.length % 4 === 0 ? '' : '='.repeat(4 - (encoded.length % 4));
+      const parsed = JSON.parse(atob(encoded + pad));
+      if (typeof parsed.vid === 'string' && /^[a-f0-9]{24}$/.test(parsed.vid)) {
+        memoryPresenceId = parsed.vid;
+        writeStorageKey(PRESENCE_ID_STORAGE, parsed.vid);
+        return parsed.vid;
+      }
+    } catch {
+      // Ignore malformed token
+    }
+  }
+  const freshId = generateRandomHexId24();
+  memoryPresenceId = freshId;
+  writeStorageKey(PRESENCE_ID_STORAGE, freshId);
+  return freshId;
+}
 
 function updateServerClockOffset(serverNowMs) {
   if (typeof serverNowMs === 'number' && Number.isFinite(serverNowMs) && serverNowMs > 0) {
@@ -142,16 +198,7 @@ function writeStorageKey(storageKey, value) {
 }
 
 export function getSelfVisitorId() {
-  const token = readStorageKey(VISITOR_WEB_KEY_STORAGE);
-  if (!token || !token.includes('.')) return '';
-  try {
-    const encoded = token.split('.')[0].replace(/-/g, '+').replace(/_/g, '/');
-    const pad = encoded.length % 4 === 0 ? '' : '='.repeat(4 - (encoded.length % 4));
-    const parsed = JSON.parse(atob(encoded + pad));
-    return typeof parsed.vid === 'string' ? parsed.vid : '';
-  } catch {
-    return '';
-  }
+  return getOrCreateClientPresenceId();
 }
 
 function readSurveyStateWebKey() {
@@ -508,38 +555,169 @@ export async function fetchAdminSurveys() {
 }
 
 // Real-Time Presence APIs (Online + Today Logins reset at 00:00 JST)
-export async function sendPresenceHeartbeat(username) {
+function cacheSelfPresenceFromData(presenceId, rawData) {
+  if (!rawData || !presenceId) return;
+  knownPresenceExistsInFirestore = true;
+  if (typeof rawData.dayKey === 'string') knownPresenceDayKey = rawData.dayKey;
+  if (typeof rawData.isAdminVerified === 'boolean') {
+    knownPresenceIsAdminVerified = rawData.isAdminVerified;
+  }
+  if (rawData.lastLoginAt) {
+    knownPresenceLastLoginTs = rawData.lastLoginAt;
+  }
+}
+
+async function directWritePresenceFallback(presenceId, username, isOnline) {
+  try {
+    const { db } = await ensureFirebase();
+    const cleanName = sanitizePresenceUsername(username);
+    const dayKey = getJstDateParts(getSyncedNowMs()).dayKey;
+    const presenceRef = doc(db, 'presence', presenceId);
+
+    if (!knownPresenceExistsInFirestore) {
+      const snap = await getDocs(
+        query(collection(db, 'presence'), where('presenceScope', '==', PRESENCE_SCOPE))
+      );
+      snap.forEach((docSnap) => {
+        if (docSnap.id === presenceId) {
+          cacheSelfPresenceFromData(presenceId, docSnap.data());
+        }
+      });
+    }
+
+    if (!knownPresenceExistsInFirestore) {
+      await setDoc(presenceRef, {
+        visitorId: presenceId,
+        username: cleanName,
+        isAdminVerified: false,
+        dayKey,
+        isOnline: Boolean(isOnline),
+        presenceScope: PRESENCE_SCOPE,
+        lastLoginAt: serverTimestamp(),
+        lastSeenAt: serverTimestamp(),
+      });
+      knownPresenceExistsInFirestore = true;
+      knownPresenceDayKey = dayKey;
+      knownPresenceIsAdminVerified = false;
+    } else {
+      const isNewDay = knownPresenceDayKey !== dayKey;
+      const updatePayload = {
+        username: cleanName,
+        isAdminVerified: Boolean(knownPresenceIsAdminVerified),
+        dayKey,
+        isOnline: Boolean(isOnline),
+        lastSeenAt: serverTimestamp(),
+        lastLoginAt:
+          isNewDay || !knownPresenceLastLoginTs
+            ? serverTimestamp()
+            : knownPresenceLastLoginTs,
+      };
+      await updateDoc(presenceRef, updatePayload);
+      knownPresenceDayKey = dayKey;
+    }
+
+    const nowIso = new Date(getSyncedNowMs()).toISOString();
+    return {
+      ok: true,
+      serverNowMs: getSyncedNowMs(),
+      visitorId: presenceId,
+      dayKey,
+      firestoreSynced: true,
+      record: {
+        visitorId: presenceId,
+        username: cleanName,
+        isAdminVerified: Boolean(knownPresenceIsAdminVerified),
+        dayKey,
+        isOnline: Boolean(isOnline),
+        lastLoginAt: nowIso,
+        lastSeenAt: nowIso,
+      },
+    };
+  } catch (err) {
+    console.warn('Direct Firestore presence fallback skipped:', err?.message || err);
+    return null;
+  }
+}
+
+async function performPresenceHeartbeat(username) {
   registerActiveTab();
+  const presenceId = getOrCreateClientPresenceId();
+  const cleanName = sanitizePresenceUsername(username);
+
   try {
     const resp = await fetch('/api/presence/heartbeat', {
       method: 'POST',
       headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
       credentials: 'same-origin',
-      body: JSON.stringify({ username: sanitizePresenceUsername(username) }),
+      body: JSON.stringify({ username: cleanName, presenceId }),
     });
-    if (!resp.ok) return null;
-    const data = await resp.json();
-    if (data && data.serverNowMs) {
-      updateServerClockOffset(data.serverNowMs);
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data && data.serverNowMs) {
+        updateServerClockOffset(data.serverNowMs);
+      }
+      if (data && data.visitorKey) {
+        writeStorageKey(VISITOR_WEB_KEY_STORAGE, data.visitorKey);
+      }
+      if (data && data.record) {
+        knownPresenceExistsInFirestore = Boolean(data.firestoreSynced);
+        knownPresenceDayKey = data.record.dayKey || knownPresenceDayKey;
+        knownPresenceIsAdminVerified = Boolean(data.record.isAdminVerified);
+      }
+      if (data && data.firestoreSynced) {
+        return data;
+      }
+      // Server couldn't write directly to Firestore; fall back to direct browser Firestore write
+      const directData = await directWritePresenceFallback(presenceId, cleanName, true);
+      return directData || data;
     }
-    if (data && data.visitorKey) {
-      writeStorageKey(VISITOR_WEB_KEY_STORAGE, data.visitorKey);
-    }
-    return data;
   } catch {
-    return null;
+    // Network or server unavailable -> try direct browser Firestore write
   }
+  return directWritePresenceFallback(presenceId, cleanName, true);
+}
+
+export async function sendPresenceHeartbeat(username) {
+  registerActiveTab();
+  if (heartbeatInFlight) {
+    queuedHeartbeatUsername = username;
+    return heartbeatInFlight;
+  }
+  heartbeatInFlight = (async () => {
+    try {
+      let result = await performPresenceHeartbeat(username);
+      while (queuedHeartbeatUsername !== null) {
+        const nextName = queuedHeartbeatUsername;
+        queuedHeartbeatUsername = null;
+        result = await performPresenceHeartbeat(nextName);
+      }
+      return result;
+    } finally {
+      heartbeatInFlight = null;
+    }
+  })();
+  return heartbeatInFlight;
 }
 
 export function sendPresenceLeave() {
   const visitorKey = readStorageKey(VISITOR_WEB_KEY_STORAGE);
-  if (!visitorKey) return Promise.resolve();
+  const presenceId = getOrCreateClientPresenceId();
+  if (!visitorKey && !presenceId) return Promise.resolve();
+  const payload = JSON.stringify({ visitorKey, presenceId });
+  try {
+    if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
+      const blob = new Blob([payload], { type: 'text/plain;charset=UTF-8' });
+      navigator.sendBeacon('/api/presence/leave', blob);
+    }
+  } catch {
+    // Ignore sendBeacon error
+  }
   try {
     return fetch('/api/presence/leave', {
       method: 'POST',
       headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
       credentials: 'same-origin',
-      body: JSON.stringify({ visitorKey }),
+      body: payload,
       keepalive: true,
     }).catch(() => {});
   } catch {
@@ -551,7 +729,9 @@ export async function fetchPresenceSnapshot() {
   const resp = await fetch('/api/presence', {
     cache: 'no-store',
     credentials: 'same-origin',
-    headers: buildAuthHeaders(),
+    headers: buildAuthHeaders({
+      'X-Presence-Id': getOrCreateClientPresenceId(),
+    }),
   });
   if (!resp.ok) {
     throw new Error('ログイン状況の取得に失敗しました。');
@@ -566,6 +746,7 @@ export async function fetchPresenceSnapshot() {
 export async function subscribePresence(onRecords, onError) {
   try {
     const { db } = await ensureFirebase();
+    const presenceId = getOrCreateClientPresenceId();
     const presenceQuery = query(
       collection(db, 'presence'),
       where('presenceScope', '==', PRESENCE_SCOPE)
@@ -575,7 +756,11 @@ export async function subscribePresence(onRecords, onError) {
       (snapshot) => {
         const records = [];
         snapshot.forEach((docSnap) => {
-          records.push(normalizePresenceDoc(docSnap.id, docSnap.data()));
+          const data = docSnap.data();
+          if (docSnap.id === presenceId) {
+            cacheSelfPresenceFromData(presenceId, data);
+          }
+          records.push(normalizePresenceDoc(docSnap.id, data));
         });
         onRecords(records);
       },

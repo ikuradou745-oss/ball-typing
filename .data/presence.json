@@ -1,4 +1,16 @@
 {
+  "7d5169c99dc85f2dc22bef03": {
+    "visitorId": "7d5169c99dc85f2dc22bef03",
+    "username": "らもビルダー",
+    "isAdminVerified": false,
+    "dayKey": "2026-11-21",
+    "isOnline": true,
+    "lastLoginAt": "2026-11-21T07:33:36.622Z",
+    "lastLoginAtMs": 1795246416622,
+    "lastSeenAt": "2026-11-21T07:33:36.622Z",
+    "lastSeenAtMs": 1795246416622,
+    "existsInFirestore": true
+  },
   "acf4a2c4422f2ddb93f5f980": {
     "visitorId": "acf4a2c4422f2ddb93f5f980",
     "username": "らもビルダー",
@@ -7,8 +19,20 @@
     "isOnline": true,
     "lastLoginAt": "2026-11-21T01:21:31.292Z",
     "lastLoginAtMs": 1795224091292,
-    "lastSeenAt": "2026-11-21T01:46:02.743Z",
-    "lastSeenAtMs": 1795225562743,
+    "lastSeenAt": "2026-11-21T02:26:50.862Z",
+    "lastSeenAtMs": 1795228010862,
+    "existsInFirestore": true
+  },
+  "fa110b647f74f43ea30ea83e": {
+    "visitorId": "fa110b647f74f43ea30ea83e",
+    "username": "らもビルダー",
+    "isAdminVerified": true,
+    "dayKey": "2026-11-21",
+    "isOnline": true,
+    "lastLoginAt": "2026-11-21T07:33:36.664Z",
+    "lastLoginAtMs": 1795246416664,
+    "lastSeenAt": "2026-11-21T07:51:06.173Z",
+    "lastSeenAtMs": 1795247466173,
     "existsInFirestore": true
   }
 }

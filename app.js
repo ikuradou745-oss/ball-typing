@@ -37,6 +37,15 @@ import {
   getPerfectMultiplier,
   prepareNextTypingWord,
 } from './lib/typingComboHelpers.js';
+import {
+  applyHealToUnit,
+  computeBandageAllyHeal,
+  computeBandageSelfHeal,
+  formatStat,
+  resolveEnemyTargetRarity,
+  resolveParryOnDefender,
+  roundStat,
+} from './lib/ballCombatHelpers.js';
 
 const GRID_SIZE = 16;
 const TOTAL_PIXELS = GRID_SIZE * GRID_SIZE;
@@ -448,14 +457,6 @@ const TYPING_WORDS = [
   { kana: 'れんぞくこうげきをきめろ', romaji: 'renzokukougekiwokimero' },
 ];
 
-function roundStat(num) {
-  return Math.round(num * 100) / 100;
-}
-
-function formatStat(num) {
-  return String(roundStat(num));
-}
-
 function pickNextWord(prevRomaji) {
   const candidates = prevRomaji
     ? TYPING_WORDS.filter((w) => w.romaji !== prevRomaji)
@@ -550,6 +551,7 @@ const ballDetailSprite = document.getElementById('ball-detail-sprite');
 const ballDetailRarity = document.getElementById('ball-detail-rarity');
 const ballDetailLevel = document.getElementById('ball-detail-level');
 const ballDetailOwnership = document.getElementById('ball-detail-ownership');
+const ballDetailAttribute = document.getElementById('ball-detail-attribute');
 const ballDetailHp = document.getElementById('ball-detail-hp');
 const ballDetailAtk = document.getElementById('ball-detail-atk');
 const ballDetailAbilityTitle = document.getElementById('ball-detail-ability-title');
@@ -719,11 +721,16 @@ function toggleEquipBall(ballId, triggerEl) {
 
 function createBallCardHTML(ball, footerLabel) {
   const rarityInfo = RARITY_STYLES[ball.rarity] || RARITY_STYLES.common;
+  const attrBadge =
+    Array.isArray(ball.attributes) && ball.attributes.length > 0
+      ? `<span class="ball-tag ball-tag-attr">${ball.attributes[0]}</span>`
+      : '';
   return {
     bg: rarityInfo.cardBg,
     html: `
       <span class="ball-card-top">
         <span class="ball-tag">${rarityInfo.label}</span>
+        ${attrBadge}
         <span class="ball-tag ball-level-tag">Lv.${ball.level}</span>
       </span>
       <span class="ball-sprite-wrap">
@@ -746,6 +753,14 @@ function openBallDetailModal(ball) {
   ballDetailRarity.textContent = rarityInfo.label;
   ballDetailLevel.textContent = `Lv.${ball.level}`;
   ballDetailOwnership.textContent = isEquipped ? '装備中' : isOwned ? '所持中' : '未所持';
+  if (ballDetailAttribute) {
+    if (Array.isArray(ball.attributes) && ball.attributes.length > 0) {
+      ballDetailAttribute.textContent = `属性: ${ball.attributes.join('・')}`;
+      ballDetailAttribute.classList.remove('hidden');
+    } else {
+      ballDetailAttribute.classList.add('hidden');
+    }
+  }
   ballDetailHp.textContent = String(ball.hp);
   ballDetailAtk.textContent = String(ball.atk);
   ballDetailAbilityTitle.textContent = ball.abilityTitle || '特殊能力';
@@ -883,19 +898,18 @@ function countOwnedByRarity(rarity) {
 
 function pickEnemyBallForPlayerUnit(playerUnit) {
   const baseRarity = playerUnit.rarity;
-  const tier = RARITY_STYLES[baseRarity] ? RARITY_STYLES[baseRarity].tier : 0;
   const ownedOfBaseRarity = countOwnedByRarity(baseRarity);
   let targetRarity = baseRarity;
 
-  if (ownedOfBaseRarity >= 6) {
-    const nextRarity = getNextRarity(baseRarity);
-    const nextCandidates = nextRarity ? getCatalogBallsByRarity(nextRarity) : [];
-    if (nextRarity && nextCandidates.length > 0) {
-      const upgradeChance = 0.1 / Math.pow(2, tier);
-      if (Math.random() < upgradeChance) {
-        targetRarity = nextRarity;
-      }
-    }
+  const nextRarity = getNextRarity(baseRarity);
+  const nextCandidates = nextRarity ? getCatalogBallsByRarity(nextRarity) : [];
+  const { upgraded } = resolveEnemyTargetRarity(
+    baseRarity,
+    ownedOfBaseRarity,
+    Boolean(nextRarity && nextCandidates.length > 0)
+  );
+  if (upgraded && nextRarity) {
+    targetRarity = nextRarity;
   }
 
   const pool = getCatalogBallsByRarity(targetRarity);
@@ -913,6 +927,9 @@ function createUnitInstance(ball, uid) {
     maxHp: ball.hp,
     hp: ball.hp,
     atk: ball.atk,
+    attributes: Array.isArray(ball.attributes) ? [...ball.attributes] : [],
+    piercing: Boolean(ball.piercing),
+    isPhysical: ball.isPhysical !== false,
     svg: ball.svg,
     revived: false,
     exploded: false,
@@ -920,6 +937,9 @@ function createUnitInstance(ball, uid) {
     isWall: false,
     attacksMade: 0,
     turnCounter: 0,
+    benchTurnCounter: 0,
+    parryCounter: 0,
+    laserCharged: false,
     isHardened: false,
     atkDebuffTurns: 0,
     atkMultiplier: 1,
@@ -939,6 +959,9 @@ function createWoodWallUnit(summonerUnit) {
     maxHp: wallHp,
     hp: wallHp,
     atk: 0,
+    attributes: [],
+    piercing: false,
+    isPhysical: false,
     svg: WOOD_WALL_SVG,
     revived: false,
     exploded: false,
@@ -946,6 +969,9 @@ function createWoodWallUnit(summonerUnit) {
     isWall: true,
     attacksMade: 0,
     turnCounter: 0,
+    benchTurnCounter: 0,
+    parryCounter: 0,
+    laserCharged: false,
     isHardened: false,
     atkDebuffTurns: 0,
     atkMultiplier: 1,
@@ -982,6 +1008,7 @@ function initBattleState() {
 function createBattleUnitElement(unit, isEnemy, isFrontTank, isFrontAttacker) {
   const wrapper = document.createElement('div');
   wrapper.dataset.uid = unit.uid;
+  const isParryReady = unit.ballId === 'sword_ball' && unit.parryCounter % 4 === 3;
   wrapper.className = [
     'battle-unit',
     isEnemy ? 'battle-unit-enemy' : 'battle-unit-player',
@@ -989,6 +1016,8 @@ function createBattleUnitElement(unit, isEnemy, isFrontTank, isFrontAttacker) {
     unit.isWall ? 'battle-unit-wall' : '',
     !unit.dead && (isFrontTank || isFrontAttacker) ? 'battle-unit-active' : '',
     unit.isHardened ? 'battle-unit-hardened' : '',
+    !unit.dead && unit.laserCharged ? 'battle-unit-laser-charged' : '',
+    !unit.dead && isParryReady ? 'battle-unit-parry-ready' : '',
   ]
     .filter(Boolean)
     .join(' ');
@@ -1006,6 +1035,19 @@ function createBattleUnitElement(unit, isEnemy, isFrontTank, isFrontAttacker) {
 
   const chips = [];
   if (!unit.dead) {
+    if (unit.piercing) {
+      chips.push('<span class="battle-unit-status-chip battle-chip-pierce">貫通</span>');
+    }
+    if (unit.laserCharged) {
+      chips.push('<span class="battle-unit-status-chip battle-chip-laser">レーザー2.5倍</span>');
+    }
+    if (unit.ballId === 'sword_ball') {
+      chips.push(
+        isParryReady
+          ? '<span class="battle-unit-status-chip battle-chip-parry">パリィ待機</span>'
+          : `<span class="battle-unit-status-chip battle-chip-parry">パリィ${unit.parryCounter % 4}/4</span>`
+      );
+    }
     if (unit.isHardened) {
       chips.push('<span class="battle-unit-status-chip battle-chip-shield">固まる</span>');
     }
@@ -1282,7 +1324,7 @@ async function handleUnitDefeat(unit, opposingTeam, ownTeam, sessionId) {
     return;
   }
 
-  // Plastic Ball death explosion (3x ATK damage to opposing front ball)
+  // Plastic Ball death explosion (3x ATK damage to opposing front ball; non-physical so cannot be parried)
   if (unit.ballId === 'plastic_ball' && !unit.exploded) {
     unit.exploded = true;
     const unitEl = battleScreenEl.querySelector(`.battle-unit[data-uid="${unit.uid}"]`);
@@ -1299,6 +1341,10 @@ async function handleUnitDefeat(unit, opposingTeam, ownTeam, sessionId) {
         boomDmg *= 0.5;
       }
       boomDmg = roundStat(boomDmg);
+      const parryCheck = resolveParryOnDefender(blastTarget, boomDmg, {
+        isPhysical: false,
+        isPiercing: false,
+      });
       blastTarget.hp = Math.max(0, roundStat(blastTarget.hp - boomDmg));
       if (blastTarget.hp <= 0) {
         blastTarget.hp = 0;
@@ -1315,11 +1361,53 @@ async function handleUnitDefeat(unit, opposingTeam, ownTeam, sessionId) {
         'battle-float-boom',
         true
       );
+      if (parryCheck.bypassedByPierce && !blastTarget.dead) {
+        showUnitImpactAndPopup(blastTarget.uid, 'パリィ無効!', 'battle-float-miss', false);
+      }
 
       if (blastTarget.dead) {
         await handleUnitDefeat(blastTarget, ownTeam, opposingTeam, sessionId);
       }
     }
+  }
+}
+
+async function runBenchBandageHealing(team, activeFrontUnit, sessionId) {
+  if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
+  const benchBandages = team.filter(
+    (u) => !u.dead && u.ballId === 'bandage_ball' && (!activeFrontUnit || u.uid !== activeFrontUnit.uid)
+  );
+  for (const bandageUnit of benchBandages) {
+    bandageUnit.benchTurnCounter += 1;
+    if (bandageUnit.benchTurnCounter % 6 !== 0) continue;
+
+    const livingAllies = team.filter((u) => !u.dead && !u.isWall && u.uid !== bandageUnit.uid);
+    if (livingAllies.length === 0) continue;
+
+    let anyHealed = false;
+    const healedPopups = [];
+    for (const ally of livingAllies) {
+      const healAmt = computeBandageAllyHeal(ally.maxHp);
+      const actual = applyHealToUnit(ally, healAmt);
+      if (actual > 0) {
+        anyHealed = true;
+        healedPopups.push({ uid: ally.uid, label: `+${formatStat(actual)} (支援!)` });
+      }
+    }
+
+    renderBattleUnits();
+    playHealSound(profile.volume);
+    showUnitImpactAndPopup(
+      bandageUnit.uid,
+      anyHealed ? '味方15%回復!' : '支援回復 (満タン)',
+      'battle-float-heal',
+      false
+    );
+    healedPopups.forEach((p) => {
+      showUnitImpactAndPopup(p.uid, p.label, 'battle-float-heal', false);
+    });
+    await battleDelay(240);
+    if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
   }
 }
 
@@ -1335,6 +1423,32 @@ async function executeUnitTurn(attacker, ownTeam, defenderTeam, isPlayerAttacker
     showUnitImpactAndPopup(attacker.uid, '固まる! (半減)', 'battle-float-shield', false);
     await battleDelay(320);
     return;
+  }
+
+  // Laser Ball: every 3rd turn charges laser without attacking (next attack deals 2.5x)
+  if (attacker.ballId === 'laser_ball' && attacker.turnCounter % 3 === 0) {
+    attacker.laserCharged = true;
+    renderBattleUnits();
+    playOpenSound(profile.volume);
+    showUnitImpactAndPopup(attacker.uid, 'レーザーチャージ!', 'battle-float-laser', false);
+    await battleDelay(320);
+    return;
+  }
+
+  // Bandage Ball: every 4th turn heals self by 18% of max HP (max 8, rounded to 0.01)
+  if (attacker.ballId === 'bandage_ball' && attacker.turnCounter % 4 === 0) {
+    const selfHeal = computeBandageSelfHeal(attacker.maxHp);
+    const actualSelfHeal = applyHealToUnit(attacker, selfHeal);
+    renderBattleUnits();
+    playHealSound(profile.volume);
+    showUnitImpactAndPopup(
+      attacker.uid,
+      actualSelfHeal > 0 ? `+${formatStat(actualSelfHeal)} (回復!)` : '自己回復 (満タン)',
+      'battle-float-heal',
+      false
+    );
+    await battleDelay(260);
+    if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
   }
 
   const defender = defenderTeam.find((u) => !u.dead);
@@ -1372,6 +1486,13 @@ async function executeUnitTurn(attacker, ownTeam, defenderTeam, isPlayerAttacker
     }
   }
 
+  let isLaserShot = false;
+  if (attacker.ballId === 'laser_ball' && attacker.laserCharged) {
+    attacker.laserCharged = false;
+    dmg *= 2.5;
+    isLaserShot = true;
+  }
+
   let isRubberCrit = false;
   if (attacker.ballId === 'rubber_ball' && attacker.attacksMade % 2 === 0) {
     dmg *= 1.5;
@@ -1405,8 +1526,43 @@ async function executeUnitTurn(attacker, ownTeam, defenderTeam, isPlayerAttacker
   await battleDelay(isSuperJump ? 260 : 210);
   if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
 
+  // Sword Ball 4th-incoming-attack Parry check (invalid against piercing or non-physical attacks like Laser)
+  const parryResult = resolveParryOnDefender(defender, dmg, {
+    isPhysical: attacker.isPhysical !== false,
+    isPiercing: Boolean(attacker.piercing),
+  });
+
+  if (parryResult.parried) {
+    const reflectedDmg = parryResult.reflectedDamage;
+    attacker.hp = Math.max(0, roundStat(attacker.hp - reflectedDmg));
+    if (attacker.hp <= 0) {
+      attacker.hp = 0;
+      attacker.dead = true;
+      playKnockoutSound(profile.volume);
+    } else {
+      playOpenSound(profile.volume);
+    }
+    renderBattleUnits();
+    showUnitImpactAndPopup(defender.uid, 'パリィ!', 'battle-float-parry', false);
+    showUnitImpactAndPopup(
+      attacker.uid,
+      `-${formatStat(reflectedDmg)} (パリィ返し!)`,
+      'battle-float-dmg',
+      true
+    );
+    if (attacker.dead) {
+      await handleUnitDefeat(attacker, defenderTeam, ownTeam, sessionId);
+    }
+    return;
+  }
+
   defender.hp = Math.max(0, roundStat(defender.hp - dmg));
-  const isStrongHit = (isPlayerAttacker && typingMultiplier > 1) || isRubberCrit || isSuperJump || isBushAttack;
+  const isStrongHit =
+    (isPlayerAttacker && typingMultiplier > 1) ||
+    isLaserShot ||
+    isRubberCrit ||
+    isSuperJump ||
+    isBushAttack;
   playAttackHitSound(profile.volume, isStrongHit);
 
   if (defender.hp <= 0) {
@@ -1426,18 +1582,21 @@ async function executeUnitTurn(attacker, ownTeam, defenderTeam, isPlayerAttacker
   renderBattleUnits();
 
   let dmgLabel = `-${formatStat(dmg)}`;
-  if (isRubberCrit) dmgLabel += ' (1.5倍!)';
+  if (isLaserShot) dmgLabel += ' (レーザー2.5倍!)';
+  else if (isRubberCrit) dmgLabel += ' (1.5倍!)';
   else if (isPlayerAttacker && typingMultiplier > 1) dmgLabel += ` (×${typingMultiplier.toFixed(1)})`;
   if (wasHalved) dmgLabel += ' (半減)';
 
   showUnitImpactAndPopup(
     defender.uid,
     dmgLabel,
-    isStrongHit ? 'battle-float-crit' : 'battle-float-dmg',
+    isLaserShot ? 'battle-float-laser' : isStrongHit ? 'battle-float-crit' : 'battle-float-dmg',
     true
   );
 
-  if (!defender.dead && isSuperJump) {
+  if (parryResult.bypassedByPierce) {
+    showUnitImpactAndPopup(defender.uid, '貫通! パリィ無効', 'battle-float-laser', false);
+  } else if (!defender.dead && isSuperJump) {
     showUnitImpactAndPopup(defender.uid, '特大ジャンプ! 攻75%', 'battle-float-debuff', false);
   } else if (!defender.dead && isBushAttack) {
     showUnitImpactAndPopup(defender.uid, 'しげみ! 命中50%', 'battle-float-heal', false);
@@ -1464,6 +1623,8 @@ async function resolveCombatRound(typingMultiplier) {
       typingMultiplier,
       sessionId
     );
+    if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
+    await runBenchBandageHealing(battleState.playerTeam, playerFront, sessionId);
     if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
   }
 
@@ -1497,6 +1658,8 @@ async function resolveCombatRound(typingMultiplier) {
       1,
       sessionId
     );
+    if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
+    await runBenchBandageHealing(battleState.enemyTeam, activeEnemy, sessionId);
     if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
   }
 
@@ -2467,6 +2630,7 @@ adminBackFromListBtn.addEventListener('click', () => {
 
 // Real-Time Presence Modal (👥) & Heartbeat Lifecycle
 let latestPresenceRecords = [];
+let hasReceivedPresenceSnapshot = false;
 let unsubscribePresence = null;
 let presenceRefreshTimer = null;
 let presenceHeartbeatTimer = null;
@@ -2578,14 +2742,26 @@ function applyPresenceSnapshotRecords(records) {
 }
 
 function stopPresenceModalSync() {
-  if (typeof unsubscribePresence === 'function') {
-    unsubscribePresence();
-    unsubscribePresence = null;
-  }
   if (presenceRefreshTimer) {
     clearInterval(presenceRefreshTimer);
     presenceRefreshTimer = null;
   }
+}
+
+async function ensurePresenceSubscription() {
+  if (typeof unsubscribePresence === 'function') return;
+  unsubscribePresence = await subscribePresence(
+    (records) => {
+      hasReceivedPresenceSnapshot = true;
+      latestPresenceRecords = records;
+      if (!presenceModal.classList.contains('hidden')) {
+        renderPresenceLists();
+      }
+    },
+    () => {
+      refreshPresenceFromServer();
+    }
+  );
 }
 
 async function triggerPresenceHeartbeat() {
@@ -2616,7 +2792,7 @@ async function triggerPresenceHeartbeat() {
 async function refreshPresenceFromServer() {
   try {
     const snapshot = await fetchPresenceSnapshot();
-    if (snapshot && Array.isArray(snapshot.records)) {
+    if (!hasReceivedPresenceSnapshot && snapshot && Array.isArray(snapshot.records)) {
       applyPresenceSnapshotRecords(snapshot.records);
     }
   } catch {
@@ -2632,26 +2808,17 @@ async function openPresenceModal() {
   renderPresenceLists();
 
   triggerPresenceHeartbeat().catch(() => {});
-  refreshPresenceFromServer();
+  if (!hasReceivedPresenceSnapshot) {
+    refreshPresenceFromServer();
+  }
+  ensurePresenceSubscription().catch(() => {});
 
-  unsubscribePresence = await subscribePresence(
-    (records) => {
-      latestPresenceRecords = records;
-      if (!presenceModal.classList.contains('hidden')) {
-        renderPresenceLists();
-      }
-    },
-    () => {
-      refreshPresenceFromServer();
-    }
-  );
-
+  // Recalculate online window & midnight rollover smoothly without overwriting live onSnapshot
   presenceRefreshTimer = setInterval(() => {
     if (!presenceModal.classList.contains('hidden')) {
-      refreshPresenceFromServer();
       renderPresenceLists();
     }
-  }, 4000);
+  }, 5000);
 }
 
 function closePresenceModal() {
@@ -2679,6 +2846,7 @@ function scheduleJstMidnightRollover() {
 
 function startPresenceLifecycle() {
   registerActiveTab();
+  ensurePresenceSubscription().catch(() => {});
   triggerPresenceHeartbeat().catch(() => {});
   if (presenceHeartbeatTimer) {
     clearInterval(presenceHeartbeatTimer);
@@ -2716,28 +2884,32 @@ document.addEventListener('visibilitychange', () => {
     registerActiveTab();
     triggerPresenceHeartbeat().catch(() => {});
     if (!presenceModal.classList.contains('hidden')) {
-      refreshPresenceFromServer();
+      renderPresenceLists();
     }
   }
 });
 
 window.addEventListener('pagehide', handleTabUnload);
 window.addEventListener('beforeunload', handleTabUnload);
-window.addEventListener('pageshow', () => {
-  didUnloadCurrentTab = false;
-  registerActiveTab();
-  triggerPresenceHeartbeat().catch(() => {});
+window.addEventListener('pageshow', (e) => {
+  if (e.persisted) {
+    didUnloadCurrentTab = false;
+    registerActiveTab();
+    triggerPresenceHeartbeat().catch(() => {});
+  }
 });
 
 // Initialize
 buildEditorDOM();
 renderHud();
 ensureFirebase().catch(() => {});
+startPresenceLifecycle();
 fetchAdminStatus()
   .then((authed) => {
     isAdminAuthenticated = authed;
     renderHud();
+    if (authed) {
+      triggerPresenceHeartbeat().catch(() => {});
+    }
   })
-  .finally(() => {
-    startPresenceLifecycle();
-  });
+  .catch(() => {});
