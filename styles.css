@@ -449,7 +449,8 @@ body {
 }
 
 .battle-turn-badge,
-.typing-combo-badge {
+.typing-combo-badge,
+.typing-shield-badge {
   padding: 2px 10px;
   border: 2px solid #000000;
   border-radius: 8px;
@@ -478,6 +479,38 @@ body {
 .typing-combo-badge-active {
   background-color: #f6c116;
   color: #000000;
+}
+
+.typing-shield-badge {
+  background-color: #38bdf8;
+  color: #082f49;
+  transition: transform 0.12s ease, background-color 0.15s ease;
+}
+
+.typing-shield-badge-low {
+  background-color: #fb923c;
+  color: #431407;
+}
+
+.typing-shield-badge-critical {
+  background-color: #fca5a5;
+  color: #7f1d1d;
+}
+
+.typing-shield-hit {
+  animation: typingShieldHit 0.24s ease-out;
+}
+
+@keyframes typingShieldHit {
+  0% {
+    transform: scale(1.16);
+  }
+  50% {
+    transform: scale(0.92);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 .typing-kana {
@@ -787,6 +820,11 @@ body {
 .battle-unit-dead .battle-unit-front-tag {
   background-color: #64748b;
   color: #ffffff;
+}
+
+.battle-unit-wall .battle-unit-front-tag {
+  background-color: #fde68a;
+  color: #78350f;
 }
 
 .battle-impact-burst {

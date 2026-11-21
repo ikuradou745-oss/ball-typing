@@ -1,6 +1,7 @@
 import {
   BALL_CATALOG,
   RARITY_STYLES,
+  WOOD_WALL_SVG,
   getCatalogBallsByRarity,
   getNextRarity,
 } from './assets/ballImages.js';
@@ -15,16 +16,27 @@ import {
   getJstDateParts,
   getMsUntilNextJstMidnight,
   getSelfVisitorId,
+  getSyncedNowMs,
   getTodaySurveyQuota,
   logoutAdminSession,
+  registerActiveTab,
   sendPresenceHeartbeat,
   sendPresenceLeave,
   splitPresenceRecords,
   submitSurveyFeedback,
   subscribeAdminSurveys,
   subscribePresence,
+  unregisterActiveTab,
   verifyAdminCodeOnServer,
 } from './firebaseClient.js';
+import {
+  TYPING_SHIELD_MAX,
+  applyTypingMistake,
+  completeTypingWord,
+  createInitialTypingComboState,
+  getPerfectMultiplier,
+  prepareNextTypingWord,
+} from './lib/typingComboHelpers.js';
 
 const GRID_SIZE = 16;
 const TOTAL_PIXELS = GRID_SIZE * GRID_SIZE;
@@ -444,10 +456,6 @@ function formatStat(num) {
   return String(roundStat(num));
 }
 
-function getPerfectMultiplier(streak) {
-  return Math.min(5, Math.round((1 + streak * 0.2) * 10) / 10);
-}
-
 function pickNextWord(prevRomaji) {
   const candidates = prevRomaji
     ? TYPING_WORDS.filter((w) => w.romaji !== prevRomaji)
@@ -502,6 +510,7 @@ const battleSpeedBtn = document.getElementById('battle-speed-btn');
 const battleTypingBox = document.getElementById('battle-typing-box');
 const battleTurnBadge = document.getElementById('battle-turn-badge');
 const typingComboBadge = document.getElementById('typing-combo-badge');
+const typingShieldBadge = document.getElementById('typing-shield-badge');
 const typingKanaEl = document.getElementById('typing-kana');
 const typingRomajiEl = document.getElementById('typing-romaji');
 const mobileTypingInput = document.getElementById('mobile-typing-input');
@@ -906,6 +915,34 @@ function createUnitInstance(ball, uid) {
     svg: ball.svg,
     revived: false,
     exploded: false,
+    summonedWall: false,
+    isWall: false,
+    attacksMade: 0,
+    turnCounter: 0,
+    isHardened: false,
+    atkDebuffTurns: 0,
+    atkMultiplier: 1,
+    missDebuffTurns: 0,
+    dead: false,
+  };
+}
+
+function createWoodWallUnit(summonerUnit) {
+  const wallHp = roundStat(summonerUnit.maxHp / 2);
+  return {
+    uid: `${summonerUnit.uid}_wall`,
+    ballId: 'wood_wall',
+    name: '木の壁',
+    rarity: summonerUnit.rarity,
+    level: summonerUnit.level,
+    maxHp: wallHp,
+    hp: wallHp,
+    atk: 0,
+    svg: WOOD_WALL_SVG,
+    revived: false,
+    exploded: false,
+    summonedWall: true,
+    isWall: true,
     attacksMade: 0,
     turnCounter: 0,
     isHardened: false,
@@ -934,32 +971,37 @@ function initBattleState() {
     enemyTeam,
     currentWord: pickNextWord(null),
     typedIndex: 0,
-    wordHasMistake: false,
-    perfectStreak: 0,
-    perfectWordsCount: 0,
-    wordsCompleted: 0,
-    maxMultiplierReached: 1,
+    ...createInitialTypingComboState(),
     turn: 'player',
     isResolvingTurn: false,
     rewardClaimed: false,
   };
 }
 
-function createBattleUnitElement(unit, isEnemy, isFrontLiving) {
+function createBattleUnitElement(unit, isEnemy, isFrontTank, isFrontAttacker) {
   const wrapper = document.createElement('div');
   wrapper.dataset.uid = unit.uid;
   wrapper.className = [
     'battle-unit',
     isEnemy ? 'battle-unit-enemy' : 'battle-unit-player',
     unit.dead ? 'battle-unit-dead' : '',
-    isFrontLiving ? 'battle-unit-active' : '',
+    unit.isWall ? 'battle-unit-wall' : '',
+    !unit.dead && (isFrontTank || isFrontAttacker) ? 'battle-unit-active' : '',
     unit.isHardened ? 'battle-unit-hardened' : '',
   ]
     .filter(Boolean)
     .join(' ');
 
   const hpPct = Math.max(0, Math.min(100, (unit.hp / unit.maxHp) * 100));
-  const statusTag = unit.dead ? '撃破' : isFrontLiving ? '先頭' : '';
+  const statusTag = unit.dead
+    ? unit.isWall
+      ? '破壊'
+      : '撃破'
+    : unit.isWall
+      ? '壁'
+      : isFrontAttacker
+        ? '先頭'
+        : '';
 
   const chips = [];
   if (!unit.dead) {
@@ -1003,18 +1045,24 @@ function createBattleUnitElement(unit, isEnemy, isFrontLiving) {
 function renderBattleUnits() {
   if (!battleState) return;
   const firstLivingEnemy = battleState.enemyTeam.find((u) => !u.dead);
+  const firstAttackerEnemy = battleState.enemyTeam.find((u) => !u.dead && !u.isWall);
   const firstLivingPlayer = battleState.playerTeam.find((u) => !u.dead);
+  const firstAttackerPlayer = battleState.playerTeam.find((u) => !u.dead && !u.isWall);
 
   enemyTerritoryEl.innerHTML = '';
   battleState.enemyTeam.forEach((enemy) => {
-    const isFront = Boolean(firstLivingEnemy && firstLivingEnemy.uid === enemy.uid);
-    enemyTerritoryEl.appendChild(createBattleUnitElement(enemy, true, isFront));
+    const isFrontTank = Boolean(firstLivingEnemy && firstLivingEnemy.uid === enemy.uid);
+    const isFrontAttacker = Boolean(firstAttackerEnemy && firstAttackerEnemy.uid === enemy.uid);
+    enemyTerritoryEl.appendChild(createBattleUnitElement(enemy, true, isFrontTank, isFrontAttacker));
   });
 
   playerTerritoryEl.innerHTML = '';
   battleState.playerTeam.forEach((playerUnit) => {
-    const isFront = Boolean(firstLivingPlayer && firstLivingPlayer.uid === playerUnit.uid);
-    playerTerritoryEl.appendChild(createBattleUnitElement(playerUnit, false, isFront));
+    const isFrontTank = Boolean(firstLivingPlayer && firstLivingPlayer.uid === playerUnit.uid);
+    const isFrontAttacker = Boolean(firstAttackerPlayer && firstAttackerPlayer.uid === playerUnit.uid);
+    playerTerritoryEl.appendChild(
+      createBattleUnitElement(playerUnit, false, isFrontTank, isFrontAttacker)
+    );
   });
 }
 
@@ -1045,6 +1093,21 @@ function renderBattleHudStrip() {
       ? `PERFECT ×${mult.toFixed(1)} (${battleState.perfectStreak}連続)`
       : `攻撃倍率 ×${mult.toFixed(1)}`;
   typingComboBadge.classList.toggle('typing-combo-badge-active', battleState.perfectStreak > 0);
+
+  if (typingShieldBadge) {
+    const showShield = battleState.perfectStreak > 0 && battleState.comboShield > 0;
+    typingShieldBadge.classList.toggle('hidden', !showShield);
+    if (showShield) {
+      typingShieldBadge.textContent = `🛡 ${battleState.comboShield}/${TYPING_SHIELD_MAX}`;
+      typingShieldBadge.classList.toggle('typing-shield-badge-low', battleState.comboShield === 2);
+      typingShieldBadge.classList.toggle(
+        'typing-shield-badge-critical',
+        battleState.comboShield === 1
+      );
+    } else {
+      typingShieldBadge.classList.remove('typing-shield-badge-low', 'typing-shield-badge-critical');
+    }
+  }
 }
 
 function renderBattleTyping() {
@@ -1188,6 +1251,8 @@ async function handleUnitDefeat(unit, opposingTeam, ownTeam, sessionId) {
   unit.atkMultiplier = 1;
   unit.missDebuffTurns = 0;
 
+  if (unit.isWall) return;
+
   // Sponge Ball once-per-battle revive at half max HP
   if (unit.ballId === 'sponge_ball' && !unit.revived) {
     await battleDelay(260);
@@ -1198,6 +1263,20 @@ async function handleUnitDefeat(unit, opposingTeam, ownTeam, sessionId) {
     renderBattleUnits();
     playHealSound(profile.volume);
     showUnitImpactAndPopup(unit.uid, `復活! HP ${formatStat(unit.hp)}`, 'battle-float-heal', false);
+    return;
+  }
+
+  // Wood Ball on-death summons a front wooden wall with half max HP (front ally ball can still move/attack)
+  if (unit.ballId === 'wood_ball' && !unit.summonedWall) {
+    unit.summonedWall = true;
+    await battleDelay(220);
+    if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
+    const wallUnit = createWoodWallUnit(unit);
+    const unitIdx = ownTeam.indexOf(unit);
+    ownTeam.splice(unitIdx >= 0 ? unitIdx + 1 : 0, 0, wallUnit);
+    renderBattleUnits();
+    playHealSound(profile.volume);
+    showUnitImpactAndPopup(wallUnit.uid, `壁召喚! HP ${formatStat(wallUnit.hp)}`, 'battle-float-shield', false);
     return;
   }
 
@@ -1372,8 +1451,8 @@ async function resolveCombatRound(typingMultiplier) {
   const sessionId = battleState.sessionId;
   battleState.isResolvingTurn = true;
 
-  // 1. Player Front Ball Turn
-  const playerFront = battleState.playerTeam.find((u) => !u.dead);
+  // 1. Player Front Non-Wall Ball Turn (ally front unit can still move/attack past a summoned wall)
+  const playerFront = battleState.playerTeam.find((u) => !u.dead && !u.isWall);
   if (playerFront && battleState.enemyTeam.some((u) => !u.dead)) {
     await executeUnitTurn(
       playerFront,
@@ -1393,20 +1472,20 @@ async function resolveCombatRound(typingMultiplier) {
     return;
   }
 
-  if (battleState.playerTeam.every((u) => u.dead)) {
+  if (battleState.playerTeam.every((u) => u.dead || u.isWall)) {
     await battleDelay(480);
     if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
     openBattleResultModal(false);
     return;
   }
 
-  // 2. Enemy Front Ball Turn
+  // 2. Enemy Front Non-Wall Ball Turn
   battleState.turn = 'enemy';
   renderBattleHudStrip();
   await battleDelay(360);
   if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
 
-  const activeEnemy = battleState.enemyTeam.find((u) => !u.dead);
+  const activeEnemy = battleState.enemyTeam.find((u) => !u.dead && !u.isWall);
   if (activeEnemy && battleState.playerTeam.some((u) => !u.dead)) {
     await executeUnitTurn(
       activeEnemy,
@@ -1426,7 +1505,7 @@ async function resolveCombatRound(typingMultiplier) {
     return;
   }
 
-  if (battleState.playerTeam.every((u) => u.dead)) {
+  if (battleState.playerTeam.every((u) => u.dead || u.isWall)) {
     await battleDelay(480);
     if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
     openBattleResultModal(false);
@@ -1440,7 +1519,7 @@ async function resolveCombatRound(typingMultiplier) {
   battleState.turn = 'player';
   battleState.currentWord = pickNextWord(battleState.currentWord.romaji);
   battleState.typedIndex = 0;
-  battleState.wordHasMistake = false;
+  Object.assign(battleState, prepareNextTypingWord(battleState));
   battleState.isResolvingTurn = false;
   renderBattleTyping();
 }
@@ -1458,7 +1537,8 @@ function handleTypingChar(rawChar) {
     !battleResultModal.classList.contains('hidden') ||
     !enemyGuideModal.classList.contains('hidden') ||
     !surveyModal.classList.contains('hidden') ||
-    !adminCrownModal.classList.contains('hidden')
+    !adminCrownModal.classList.contains('hidden') ||
+    !presenceModal.classList.contains('hidden')
   ) {
     return;
   }
@@ -1473,27 +1553,25 @@ function handleTypingChar(rawChar) {
     battleTypingBox.classList.remove('typing-error-flash');
 
     if (battleState.typedIndex >= word.romaji.length) {
-      battleState.wordsCompleted += 1;
-      if (!battleState.wordHasMistake) {
-        battleState.perfectStreak += 1;
-        battleState.perfectWordsCount += 1;
-      } else {
-        battleState.perfectStreak = 0;
-      }
-      const mult = getPerfectMultiplier(battleState.perfectStreak);
-      battleState.maxMultiplierReached = Math.max(battleState.maxMultiplierReached, mult);
+      const completed = completeTypingWord(battleState);
+      Object.assign(battleState, completed.state);
       playSaveSound(profile.volume);
       renderBattleTyping();
-      resolveCombatRound(mult);
+      resolveCombatRound(completed.multiplier);
     } else {
       playClickSound(profile.volume);
       renderBattleTyping();
     }
   } else {
-    battleState.wordHasMistake = true;
-    battleState.perfectStreak = 0;
+    const mistake = applyTypingMistake(battleState);
+    Object.assign(battleState, mistake.state);
     playErrorSound(profile.volume);
     renderBattleHudStrip();
+    if (mistake.outcome === 'shield_damaged' && typingShieldBadge) {
+      typingShieldBadge.classList.remove('typing-shield-hit');
+      void typingShieldBadge.offsetWidth;
+      typingShieldBadge.classList.add('typing-shield-hit');
+    }
     battleTypingBox.classList.add('typing-error-flash');
     if (typingErrorTimer) clearTimeout(typingErrorTimer);
     typingErrorTimer = setTimeout(() => {
@@ -2449,9 +2527,10 @@ function buildPresenceListItem(record, showOnlineStyle) {
 }
 
 function renderPresenceLists() {
+  const syncedNowMs = getSyncedNowMs();
   const { todayDayKey, onlineUsers, todayLogins } = splitPresenceRecords(
     latestPresenceRecords,
-    Date.now(),
+    syncedNowMs,
     getSelfVisitorId()
   );
 
@@ -2481,6 +2560,18 @@ function renderPresenceLists() {
     todayLogins.forEach((record) => {
       presenceTodayList.appendChild(buildPresenceListItem(record, false));
     });
+  }
+}
+
+function applyPresenceSnapshotRecords(records) {
+  if (!Array.isArray(records)) return;
+  latestPresenceRecords = records.map((rec) => ({
+    ...rec,
+    lastLoginAtMs: rec.lastLoginAt ? Date.parse(rec.lastLoginAt) || 0 : 0,
+    lastSeenAtMs: rec.lastSeenAt ? Date.parse(rec.lastSeenAt) || 0 : 0,
+  }));
+  if (!presenceModal.classList.contains('hidden')) {
+    renderPresenceLists();
   }
 }
 
@@ -2520,29 +2611,26 @@ async function triggerPresenceHeartbeat() {
   return data;
 }
 
+async function refreshPresenceFromServer() {
+  try {
+    const snapshot = await fetchPresenceSnapshot();
+    if (snapshot && Array.isArray(snapshot.records)) {
+      applyPresenceSnapshotRecords(snapshot.records);
+    }
+  } catch {
+    // Keep current list on transient polling error
+  }
+}
+
 async function openPresenceModal() {
   playOpenSound(profile.volume);
   stopPresenceModalSync();
   presenceModal.classList.remove('hidden');
-  presenceDayBadge.textContent = `${getJstDateParts().dayKey}（00:00更新）`;
+  presenceDayBadge.textContent = `${getJstDateParts(getSyncedNowMs()).dayKey}（00:00更新）`;
   renderPresenceLists();
 
   triggerPresenceHeartbeat().catch(() => {});
-
-  fetchPresenceSnapshot()
-    .then((snapshot) => {
-      if (snapshot && Array.isArray(snapshot.records)) {
-        latestPresenceRecords = snapshot.records.map((rec) => ({
-          ...rec,
-          lastLoginAtMs: rec.lastLoginAt ? Date.parse(rec.lastLoginAt) || 0 : 0,
-          lastSeenAtMs: rec.lastSeenAt ? Date.parse(rec.lastSeenAt) || 0 : 0,
-        }));
-        if (!presenceModal.classList.contains('hidden')) {
-          renderPresenceLists();
-        }
-      }
-    })
-    .catch(() => {});
+  refreshPresenceFromServer();
 
   unsubscribePresence = await subscribePresence(
     (records) => {
@@ -2551,30 +2639,17 @@ async function openPresenceModal() {
         renderPresenceLists();
       }
     },
-    async () => {
-      try {
-        const snapshot = await fetchPresenceSnapshot();
-        if (snapshot && Array.isArray(snapshot.records)) {
-          latestPresenceRecords = snapshot.records.map((rec) => ({
-            ...rec,
-            lastLoginAtMs: rec.lastLoginAt ? Date.parse(rec.lastLoginAt) || 0 : 0,
-            lastSeenAtMs: rec.lastSeenAt ? Date.parse(rec.lastSeenAt) || 0 : 0,
-          }));
-          if (!presenceModal.classList.contains('hidden')) {
-            renderPresenceLists();
-          }
-        }
-      } catch {
-        // Keep current list on transient polling error
-      }
+    () => {
+      refreshPresenceFromServer();
     }
   );
 
   presenceRefreshTimer = setInterval(() => {
     if (!presenceModal.classList.contains('hidden')) {
+      refreshPresenceFromServer();
       renderPresenceLists();
     }
-  }, 5000);
+  }, 4000);
 }
 
 function closePresenceModal() {
@@ -2588,7 +2663,7 @@ function scheduleJstMidnightRollover() {
   if (presenceMidnightTimer) {
     clearTimeout(presenceMidnightTimer);
   }
-  const waitMs = Math.max(1000, getMsUntilNextJstMidnight() + 500);
+  const waitMs = Math.max(1000, getMsUntilNextJstMidnight(getSyncedNowMs()) + 500);
   presenceMidnightTimer = setTimeout(() => {
     if (document.visibilityState !== 'hidden') {
       triggerPresenceHeartbeat().catch(() => {});
@@ -2601,6 +2676,7 @@ function scheduleJstMidnightRollover() {
 }
 
 function startPresenceLifecycle() {
+  registerActiveTab();
   triggerPresenceHeartbeat().catch(() => {});
   if (presenceHeartbeatTimer) {
     clearInterval(presenceHeartbeatTimer);
@@ -2608,9 +2684,21 @@ function startPresenceLifecycle() {
   presenceHeartbeatTimer = setInterval(() => {
     if (document.visibilityState !== 'hidden') {
       triggerPresenceHeartbeat().catch(() => {});
+    } else {
+      registerActiveTab();
     }
   }, PRESENCE_HEARTBEAT_INTERVAL_MS);
   scheduleJstMidnightRollover();
+}
+
+let didUnloadCurrentTab = false;
+function handleTabUnload() {
+  if (didUnloadCurrentTab) return;
+  didUnloadCurrentTab = true;
+  const isLastTab = unregisterActiveTab();
+  if (isLastTab) {
+    sendPresenceLeave();
+  }
 }
 
 openPresenceBtn.addEventListener('click', openPresenceModal);
@@ -2622,12 +2710,21 @@ presenceModal.addEventListener('click', (e) => {
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
+    didUnloadCurrentTab = false;
+    registerActiveTab();
     triggerPresenceHeartbeat().catch(() => {});
+    if (!presenceModal.classList.contains('hidden')) {
+      refreshPresenceFromServer();
+    }
   }
 });
 
-window.addEventListener('pagehide', () => {
-  sendPresenceLeave();
+window.addEventListener('pagehide', handleTabUnload);
+window.addEventListener('beforeunload', handleTabUnload);
+window.addEventListener('pageshow', () => {
+  didUnloadCurrentTab = false;
+  registerActiveTab();
+  triggerPresenceHeartbeat().catch(() => {});
 });
 
 // Initialize

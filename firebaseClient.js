@@ -5,6 +5,7 @@ import {
   getDocFromServer,
   getDocs,
   getFirestore,
+  initializeFirestore,
   onSnapshot,
   query,
   where,
@@ -19,6 +20,7 @@ import {
 } from './lib/surveyHelpers.js';
 import {
   PRESENCE_HEARTBEAT_INTERVAL_MS,
+  PRESENCE_ONLINE_WINDOW_MS,
   PRESENCE_SCOPE,
   getMsUntilNextJstMidnight,
   normalizePresenceDoc,
@@ -40,6 +42,8 @@ const ADMIN_WEB_KEY_STORAGE = 'ball_typing_admin_key_v1';
 const ADMIN_CHANNEL_STORAGE = 'ball_typing_admin_channel_v1';
 const VISITOR_WEB_KEY_STORAGE = 'ball_typing_visitor_key_v1';
 const SURVEY_STATE_STORAGE = 'ball_typing_survey_state_v1';
+const OPEN_TABS_STORAGE = 'ball_typing_open_tabs_v1';
+const TAB_ID_SESSION_KEY = 'ball_typing_tab_id_v1';
 
 export const OperationType = Object.freeze({
   CREATE: 'create',
@@ -54,6 +58,68 @@ let appInstance = null;
 let dbInstance = null;
 let initPromise = null;
 let connectionTested = false;
+let serverClockOffsetMs = 0;
+
+function updateServerClockOffset(serverNowMs) {
+  if (typeof serverNowMs === 'number' && Number.isFinite(serverNowMs) && serverNowMs > 0) {
+    serverClockOffsetMs = serverNowMs - Date.now();
+  }
+}
+
+export function getSyncedNowMs() {
+  return Date.now() + serverClockOffsetMs;
+}
+
+function getTabId() {
+  try {
+    let tabId = sessionStorage.getItem(TAB_ID_SESSION_KEY);
+    if (!tabId) {
+      tabId = `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+      sessionStorage.setItem(TAB_ID_SESSION_KEY, tabId);
+    }
+    return tabId;
+  } catch {
+    return 'default_tab';
+  }
+}
+
+export function registerActiveTab() {
+  try {
+    const now = Date.now();
+    const tabId = getTabId();
+    const raw = localStorage.getItem(OPEN_TABS_STORAGE);
+    const parsed = raw ? JSON.parse(raw) : {};
+    const next = {};
+    for (const [id, ts] of Object.entries(parsed && typeof parsed === 'object' ? parsed : {})) {
+      if (typeof ts === 'number' && now - ts <= PRESENCE_ONLINE_WINDOW_MS) {
+        next[id] = ts;
+      }
+    }
+    next[tabId] = now;
+    localStorage.setItem(OPEN_TABS_STORAGE, JSON.stringify(next));
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+export function unregisterActiveTab() {
+  try {
+    const now = Date.now();
+    const tabId = getTabId();
+    const raw = localStorage.getItem(OPEN_TABS_STORAGE);
+    const parsed = raw ? JSON.parse(raw) : {};
+    const next = {};
+    for (const [id, ts] of Object.entries(parsed && typeof parsed === 'object' ? parsed : {})) {
+      if (id !== tabId && typeof ts === 'number' && now - ts <= PRESENCE_ONLINE_WINDOW_MS) {
+        next[id] = ts;
+      }
+    }
+    localStorage.setItem(OPEN_TABS_STORAGE, JSON.stringify(next));
+    return Object.keys(next).length === 0;
+  } catch {
+    return true;
+  }
+}
 
 function readStorageKey(storageKey) {
   try {
@@ -175,9 +241,19 @@ export async function ensureFirebase() {
       }
       const firebaseConfig = await resp.json();
       appInstance = initializeApp(firebaseConfig);
-      dbInstance = firebaseConfig.firestoreDatabaseId
-        ? getFirestore(appInstance, firebaseConfig.firestoreDatabaseId)
-        : getFirestore(appInstance);
+      try {
+        dbInstance = firebaseConfig.firestoreDatabaseId
+          ? initializeFirestore(
+              appInstance,
+              { experimentalAutoDetectLongPolling: true },
+              firebaseConfig.firestoreDatabaseId
+            )
+          : initializeFirestore(appInstance, { experimentalAutoDetectLongPolling: true });
+      } catch {
+        dbInstance = firebaseConfig.firestoreDatabaseId
+          ? getFirestore(appInstance, firebaseConfig.firestoreDatabaseId)
+          : getFirestore(appInstance);
+      }
       await testConnection(dbInstance);
       return { app: appInstance, db: dbInstance };
     })().catch((err) => {
@@ -433,6 +509,7 @@ export async function fetchAdminSurveys() {
 
 // Real-Time Presence APIs (Online + Today Logins reset at 00:00 JST)
 export async function sendPresenceHeartbeat(username) {
+  registerActiveTab();
   try {
     const resp = await fetch('/api/presence/heartbeat', {
       method: 'POST',
@@ -442,6 +519,9 @@ export async function sendPresenceHeartbeat(username) {
     });
     if (!resp.ok) return null;
     const data = await resp.json();
+    if (data && data.serverNowMs) {
+      updateServerClockOffset(data.serverNowMs);
+    }
     if (data && data.visitorKey) {
       writeStorageKey(VISITOR_WEB_KEY_STORAGE, data.visitorKey);
     }
@@ -476,7 +556,11 @@ export async function fetchPresenceSnapshot() {
   if (!resp.ok) {
     throw new Error('ログイン状況の取得に失敗しました。');
   }
-  return await resp.json();
+  const data = await resp.json();
+  if (data && data.serverNowMs) {
+    updateServerClockOffset(data.serverNowMs);
+  }
+  return data;
 }
 
 export async function subscribePresence(onRecords, onError) {

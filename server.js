@@ -49,7 +49,8 @@ const ADMIN_SESSION_TTL_MS = 365 * 24 * 60 * 60 * 1000;
 const VISITOR_COOKIE_TTL_MS = 365 * 24 * 60 * 60 * 1000;
 const MAX_CODE_ATTEMPTS = 10;
 const CODE_LOCKOUT_MS = 15 * 60 * 1000;
-const FIRESTORE_CACHE_TTL_MS = 4000;
+const FIRESTORE_CACHE_TTL_MS = 15000;
+const PRESENCE_CACHE_TTL_MS = 2000;
 
 // Server-only scrypt digest (plaintext code is never stored in code or sent to client)
 const ADMIN_CODE_SALT = 'bt_survey_admin_salt_2026_v1';
@@ -104,6 +105,7 @@ const SESSION_SECRET = loadOrCreateServerSecret();
 const failedCodeAttempts = new Map();
 
 app.use(express.json({ limit: '8kb' }));
+app.use(express.text({ type: 'text/plain', limit: '8kb' }));
 
 // Block HTTP access to server scripts, security files, rules, tests, and local server data
 const BLOCKED_STATIC_PATHS = new Set([
@@ -330,7 +332,7 @@ async function loadQuotasMap(forceRefresh = false) {
 
 async function loadPresenceMap(forceRefresh = false) {
   const now = Date.now();
-  if (!forceRefresh && presenceCache.map && now - presenceCache.fetchedAt < FIRESTORE_CACHE_TTL_MS) {
+  if (!forceRefresh && presenceCache.map && now - presenceCache.fetchedAt < PRESENCE_CACHE_TTL_MS) {
     return presenceCache.map;
   }
 
@@ -728,20 +730,21 @@ app.get('/api/presence', async (req, res) => {
   const existingVisitor = getExistingVisitorFromRequest(req);
   const map = await loadPresenceMap();
   const records = Object.values(map);
+  const serverNowMs = Date.now();
   const split = splitPresenceRecords(
     records,
-    Date.now(),
+    serverNowMs,
     existingVisitor?.visitorId || ''
   );
-  res.json({ ok: true, records, ...split });
+  res.json({ ok: true, serverNowMs, records, ...split });
 });
 
 app.post('/api/presence/heartbeat', async (req, res) => {
   const { visitorId, visitorKey } = getOrIssueVisitor(req, res);
   const username = sanitizePresenceUsername(req.body?.username);
   const isAdminVerified = await isAdminRequestAsync(req);
-  const dayKey = getJstDateParts().dayKey;
   const nowMs = Date.now();
+  const dayKey = getJstDateParts(nowMs).dayKey;
   const nowIso = new Date(nowMs).toISOString();
 
   const existingMap = await loadPresenceMap();
@@ -825,11 +828,19 @@ app.post('/api/presence/heartbeat', async (req, res) => {
   localPresence[visitorId] = record;
   writeJsonAtomic(PRESENCE_FILE, localPresence);
 
-  res.json({ ok: true, visitorId, visitorKey, dayKey, record });
+  res.json({ ok: true, serverNowMs: nowMs, visitorId, visitorKey, dayKey, record });
 });
 
 app.post('/api/presence/leave', async (req, res) => {
-  const bodyToken = typeof req.body?.visitorKey === 'string' ? req.body.visitorKey : '';
+  let parsedBody = req.body;
+  if (typeof parsedBody === 'string') {
+    try {
+      parsedBody = JSON.parse(parsedBody);
+    } catch {
+      parsedBody = {};
+    }
+  }
+  const bodyToken = typeof parsedBody?.visitorKey === 'string' ? parsedBody.visitorKey : '';
   const candidate = req.get('x-visitor-key') || parseCookies(req).bt_visitor || bodyToken;
   const parsed = verifySignedPayload(candidate);
   if (!parsed || typeof parsed.vid !== 'string' || !/^[a-f0-9]{24}$/.test(parsed.vid)) {

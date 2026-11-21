@@ -114,6 +114,37 @@ function createGrassBallSvg() {
   `.trim();
 }
 
+function createWoodBallSvg() {
+  return `
+    <svg viewBox="0 0 64 64" class="ball-vector-svg" aria-hidden="true">
+      <circle cx="32" cy="32" r="27" fill="#D97706" stroke="#000000" stroke-width="4" />
+      <path d="M10 38 A24 24 0 0 0 54 38 A26 22 0 0 1 10 38 Z" fill="#92400E" opacity="0.55" />
+      <circle cx="28" cy="26" r="17" fill="#FCD34D" opacity="0.32" />
+      <!-- Wood grain lines and knot -->
+      <path d="M12 24 Q28 18 52 24" fill="none" stroke="#78350F" stroke-width="2.6" stroke-linecap="round" opacity="0.72" />
+      <path d="M9 34 Q30 41 55 33" fill="none" stroke="#78350F" stroke-width="2.6" stroke-linecap="round" opacity="0.72" />
+      <path d="M16 45 Q32 50 48 45" fill="none" stroke="#78350F" stroke-width="2.4" stroke-linecap="round" opacity="0.65" />
+      <ellipse cx="38" cy="28" rx="4.2" ry="2.8" fill="#B45309" stroke="#78350F" stroke-width="1.8" />
+      <ellipse cx="21" cy="15.5" rx="6.8" ry="3.4" transform="rotate(-24 21 15.5)" fill="#FFFFFF" opacity="0.75" />
+    </svg>
+  `.trim();
+}
+
+export const WOOD_WALL_SVG = `
+  <svg viewBox="0 0 64 64" class="ball-vector-svg" aria-hidden="true">
+    <rect x="11" y="10" width="42" height="46" rx="6" fill="#B45309" stroke="#000000" stroke-width="4" />
+    <rect x="15" y="14" width="11" height="38" rx="2" fill="#D97706" stroke="#78350F" stroke-width="2" />
+    <rect x="27" y="14" width="10" height="38" rx="2" fill="#F59E0B" stroke="#78350F" stroke-width="2" />
+    <rect x="38" y="14" width="11" height="38" rx="2" fill="#D97706" stroke="#78350F" stroke-width="2" />
+    <rect x="9" y="21" width="46" height="7" rx="2" fill="#92400E" stroke="#000000" stroke-width="2.5" />
+    <rect x="9" y="40" width="46" height="7" rx="2" fill="#92400E" stroke="#000000" stroke-width="2.5" />
+    <circle cx="15" cy="24.5" r="1.7" fill="#E2E8F0" />
+    <circle cx="49" cy="24.5" r="1.7" fill="#E2E8F0" />
+    <circle cx="15" cy="43.5" r="1.7" fill="#E2E8F0" />
+    <circle cx="49" cy="43.5" r="1.7" fill="#E2E8F0" />
+  </svg>
+`.trim();
+
 function createRivalBallSvg() {
   return `
     <svg viewBox="0 0 64 64" class="ball-vector-svg" aria-hidden="true">
@@ -193,6 +224,17 @@ export const BALL_CATALOG = {
     abilityTitle: '特殊能力',
     ability: '4ターンに1度「しげみ」攻撃を行い、相手は2ターン、攻撃を50%で外すようになる。',
     svg: createGrassBallSvg(),
+  },
+  wood_ball: {
+    id: 'wood_ball',
+    name: '木材ボール',
+    rarity: 'uncommon',
+    level: 1,
+    hp: 9,
+    atk: 1.1,
+    abilityTitle: '特殊能力',
+    ability: '死亡時、最大HPの半分のHPを持つ壁を召喚する。（味方の先頭のボールは動ける）',
+    svg: createWoodBallSvg(),
   },
 };
 
