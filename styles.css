@@ -2216,6 +2216,22 @@ body {
   background-color: #38bdf8;
 }
 
+.hud-presence-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  min-width: 48px;
+  height: 48px;
+  padding: 0;
+  border-radius: 14px;
+  background-color: #e0f2fe;
+  color: #0f172a;
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1;
+}
+
 .hud-name-wrap,
 .preview-name-row {
   display: flex;
@@ -2558,6 +2574,230 @@ body {
   font-weight: 700;
   color: #64748b;
   font-variant-numeric: tabular-nums;
+}
+
+/* Real-Time Presence Modal (👥) */
+.presence-dialog {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 540px;
+  max-height: 92dvh;
+  overflow: hidden;
+  border-radius: 16px;
+  background-color: #fffdf7;
+}
+
+.presence-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+  padding: 18px 20px;
+}
+
+.presence-top-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 2.5px solid #000000;
+  border-radius: 12px;
+  background-color: #f1f5f9;
+}
+
+.presence-live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 900;
+  color: #065f46;
+}
+
+.presence-day-badge {
+  padding: 2px 10px;
+  border: 2px solid #000000;
+  border-radius: 8px;
+  background-color: #ffffff;
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #1e293b;
+}
+
+.presence-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 3px solid #000000;
+  border-radius: 14px;
+  background-color: #ffffff;
+}
+
+.presence-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.presence-section-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 900;
+  color: #0f172a;
+}
+
+.presence-count-badge {
+  padding: 2px 10px;
+  border: 2px solid #000000;
+  border-radius: 8px;
+  background-color: #e2e8f0;
+  font-size: 12px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  color: #0f172a;
+  white-space: nowrap;
+}
+
+.presence-count-online {
+  background-color: #bbf7d0;
+  color: #14532d;
+}
+
+.presence-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 210px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.presence-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 2px solid #000000;
+  border-radius: 10px;
+  background-color: #f8fafc;
+}
+
+.presence-item-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.presence-item-name {
+  font-size: 14px;
+  font-weight: 900;
+  color: #0f172a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.presence-self-tag {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border: 1.5px solid #000000;
+  border-radius: 6px;
+  background-color: #f6c116;
+  font-size: 11px;
+  font-weight: 900;
+  color: #000000;
+}
+
+.presence-item-meta {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #475569;
+}
+
+.presence-dot-online,
+.presence-dot-offline {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  border: 2px solid #000000;
+  border-radius: 999px;
+}
+
+.presence-dot-online {
+  background-color: #22c55e;
+}
+
+.presence-dot-offline {
+  background-color: #cbd5e1;
+}
+
+.presence-empty {
+  padding: 10px 12px;
+  border: 2px dashed #94a3b8;
+  border-radius: 10px;
+  background-color: #f8fafc;
+  font-size: 13px;
+  font-weight: 700;
+  color: #475569;
+  text-align: center;
+}
+
+@media (max-width: 560px) {
+  .top-hud {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px 12px 0;
+  }
+
+  .hud-left-actions {
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .hud-question-btn,
+  .hud-crown-btn,
+  .hud-presence-btn {
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+    font-size: 18px;
+  }
+
+  .hud-survey-btn {
+    min-height: 38px;
+    padding: 4px 10px;
+    font-size: 12px;
+  }
+
+  .hud-profile-btn {
+    max-width: 100%;
+    min-height: 44px;
+    gap: 8px;
+    padding: 4px 10px 4px 4px;
+  }
+
+  .avatar-canvas {
+    width: 34px;
+    height: 34px;
+  }
+
+  .hud-gear-badge {
+    width: 30px;
+    height: 30px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

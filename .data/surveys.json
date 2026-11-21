@@ -1,0 +1,16 @@
+[
+  {
+    "id": "b3633d6b-5926-488b-aa2a-3b63813b25e9",
+    "authorName": "テストプレイヤー",
+    "content": "リアルタイム保存テストです！",
+    "isAdminVerified": true,
+    "createdAt": "2026-11-19T11:50:50.634Z"
+  },
+  {
+    "id": "9b85ca64-220c-4313-b064-7745ef2d0951",
+    "authorName": "プレイヤー1",
+    "content": "新しいボールやステージの追加を楽しみにしています！",
+    "isAdminVerified": false,
+    "createdAt": "2026-11-19T11:49:31.560Z"
+  }
+]

@@ -5,15 +5,15 @@
       "description": "A user-submitted suggestion or feature request for Ball Typing.",
       "type": "object",
       "properties": {
-        "uid": {
+        "visitorId": {
           "type": "string",
-          "description": "Firebase Auth UID of the submitter.",
+          "description": "Server-assigned webkey visitor identifier.",
           "maxLength": 128,
           "pattern": "^[a-zA-Z0-9_\\-]+$"
         },
         "authorName": {
           "type": "string",
-          "description": "Display name entered by the player.",
+          "description": "Display name from player Settings.",
           "minLength": 1,
           "maxLength": 20
         },
@@ -23,22 +23,39 @@
           "minLength": 1,
           "maxLength": 300
         },
+        "isAdminVerified": {
+          "type": "boolean",
+          "description": "Whether the submitter held verified admin status."
+        },
+        "adminChannel": {
+          "type": "string",
+          "description": "Server-validated admin real-time query channel key.",
+          "minLength": 1,
+          "maxLength": 128
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time",
           "description": "Server-validated creation timestamp."
         }
       },
-      "required": ["uid", "authorName", "content", "createdAt"]
+      "required": [
+        "visitorId",
+        "authorName",
+        "content",
+        "isAdminVerified",
+        "adminChannel",
+        "createdAt"
+      ]
     },
     "SurveyQuota": {
       "title": "SurveyQuota",
-      "description": "Per-user daily JST survey submission counter enforcing a strict limit of 3 per day.",
+      "description": "Per-visitor daily JST survey submission counter enforcing a strict limit of 3 per day.",
       "type": "object",
       "properties": {
-        "uid": {
+        "visitorId": {
           "type": "string",
-          "description": "Firebase Auth UID owning this quota record.",
+          "description": "Visitor webkey ID owning this quota record.",
           "maxLength": 128,
           "pattern": "^[a-zA-Z0-9_\\-]+$"
         },
@@ -64,46 +81,181 @@
           "maxLength": 128,
           "pattern": "^[a-zA-Z0-9_\\-]+$"
         },
+        "serverAuth": {
+          "type": "string",
+          "description": "Server-only write gate proof.",
+          "minLength": 1,
+          "maxLength": 128
+        },
         "updatedAt": {
           "type": "string",
           "format": "date-time",
           "description": "Server timestamp of the latest submission."
         }
       },
-      "required": ["uid", "year", "month", "day", "count", "lastSurveyId", "updatedAt"]
+      "required": [
+        "visitorId",
+        "year",
+        "month",
+        "day",
+        "count",
+        "lastSurveyId",
+        "serverAuth",
+        "updatedAt"
+      ]
     },
     "Admin": {
       "title": "Admin",
-      "description": "Authorized administrator registry document.",
+      "description": "Authorized administrator registry document synced via webkey visitor ID.",
       "type": "object",
       "properties": {
-        "uid": {
+        "visitorId": {
           "type": "string",
-          "description": "Firebase Auth UID of the administrator.",
+          "description": "Visitor webkey ID of the administrator.",
           "maxLength": 128,
           "pattern": "^[a-zA-Z0-9_\\-]+$"
         },
-        "email": {
+        "username": {
           "type": "string",
-          "description": "Administrator email address.",
-          "maxLength": 200
+          "description": "Player display name at verification time.",
+          "minLength": 1,
+          "maxLength": 20
+        },
+        "verified": {
+          "type": "boolean",
+          "description": "Whether admin verification is currently active."
+        },
+        "serverAuth": {
+          "type": "string",
+          "description": "Server-only write gate proof.",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "verifiedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when first verified."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of latest update."
         }
       },
-      "required": ["uid"]
+      "required": [
+        "visitorId",
+        "username",
+        "verified",
+        "serverAuth",
+        "verifiedAt",
+        "updatedAt"
+      ]
+    },
+    "Presence": {
+      "title": "Presence",
+      "description": "Real-time online and daily JST login presence for a player.",
+      "type": "object",
+      "properties": {
+        "visitorId": {
+          "type": "string",
+          "description": "Visitor webkey ID.",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "username": {
+          "type": "string",
+          "description": "Player display name.",
+          "minLength": 1,
+          "maxLength": 20
+        },
+        "isAdminVerified": {
+          "type": "boolean",
+          "description": "Whether the player holds verified admin status."
+        },
+        "dayKey": {
+          "type": "string",
+          "description": "JST calendar date YYYY-MM-DD of latest login.",
+          "minLength": 10,
+          "maxLength": 10,
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "isOnline": {
+          "type": "boolean",
+          "description": "Whether the player session is currently active."
+        },
+        "presenceScope": {
+          "type": "string",
+          "description": "Lobby visibility scope.",
+          "enum": ["public_lobby"]
+        },
+        "lastLoginAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the player logged in for the current JST day."
+        },
+        "lastSeenAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of the latest heartbeat."
+        }
+      },
+      "required": [
+        "visitorId",
+        "username",
+        "isAdminVerified",
+        "dayKey",
+        "isOnline",
+        "presenceScope",
+        "lastLoginAt",
+        "lastSeenAt"
+      ]
+    },
+    "PresenceGate": {
+      "title": "PresenceGate",
+      "description": "Server-only write gate document paired atomically with Presence writes.",
+      "type": "object",
+      "properties": {
+        "visitorId": {
+          "type": "string",
+          "description": "Visitor webkey ID.",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "serverAuth": {
+          "type": "string",
+          "description": "Server-only write gate proof.",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of latest update."
+        }
+      },
+      "required": ["visitorId", "serverAuth", "updatedAt"]
     }
   },
   "firestore": {
     "/surveys/{surveyId}": {
       "schema": { "$ref": "#/entities/Survey" },
-      "description": "Feature request surveys submitted by authenticated players (readable only by admins)."
+      "description": "Feature request surveys saved in real time and readable via adminChannel query."
     },
-    "/surveyQuotas/{userId}": {
+    "/surveyQuotas/{visitorId}": {
       "schema": { "$ref": "#/entities/SurveyQuota" },
-      "description": "Server-time-enforced daily quota tracker limiting each user to 3 surveys per JST day."
+      "description": "Server-time-enforced daily quota tracker limiting each visitor to 3 surveys per JST day."
     },
-    "/admins/{userId}": {
+    "/admins/{visitorId}": {
       "schema": { "$ref": "#/entities/Admin" },
-      "description": "Admin role documents readable only by the owning admin or existing admins."
+      "description": "Admin role documents persisted in Firestore and linked to signed browser webkeys."
+    },
+    "/presence/{visitorId}": {
+      "schema": { "$ref": "#/entities/Presence" },
+      "description": "Real-time online and daily login status per visitor, resetting at 00:00 JST."
+    },
+    "/presenceGates/{visitorId}": {
+      "schema": { "$ref": "#/entities/PresenceGate" },
+      "description": "Server-only atomic batch gate preventing browser tampering of presence records."
     }
   }
 }

@@ -1,0 +1,38 @@
+{
+  "05ac36cdfd999328bf48347b": {
+    "visitorId": "05ac36cdfd999328bf48347b",
+    "username": "プレイヤー1",
+    "isAdminVerified": false,
+    "dayKey": "2026-11-21",
+    "isOnline": false,
+    "lastLoginAt": "2026-11-21T01:20:57.430Z",
+    "lastLoginAtMs": 1795224057430,
+    "lastSeenAt": "2026-11-21T01:21:05.880Z",
+    "lastSeenAtMs": 1795224065880,
+    "existsInFirestore": true
+  },
+  "58bfc5ba1841e3ded7d7dc4d": {
+    "visitorId": "58bfc5ba1841e3ded7d7dc4d",
+    "username": "プレイヤー1",
+    "isAdminVerified": false,
+    "dayKey": "2026-11-21",
+    "isOnline": true,
+    "lastLoginAt": "2026-11-21T01:19:22.541Z",
+    "lastLoginAtMs": 1795223962541,
+    "lastSeenAt": "2026-11-21T01:19:42.439Z",
+    "lastSeenAtMs": 1795223982439,
+    "existsInFirestore": true
+  },
+  "7e06a28115227b842d06b93a": {
+    "visitorId": "7e06a28115227b842d06b93a",
+    "username": "プレイヤー1",
+    "isAdminVerified": false,
+    "dayKey": "2026-11-21",
+    "isOnline": true,
+    "lastLoginAt": "2026-11-21T01:18:24.030Z",
+    "lastLoginAtMs": 1795223904030,
+    "lastSeenAt": "2026-11-21T01:18:43.343Z",
+    "lastSeenAtMs": 1795223923343,
+    "existsInFirestore": true
+  }
+}

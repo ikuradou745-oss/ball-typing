@@ -3,6 +3,34 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { initializeApp } from 'firebase/app';
+import {
+  collection,
+  doc,
+  getDocs,
+  getFirestore,
+  query,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+  where,
+  writeBatch,
+} from 'firebase/firestore';
+import {
+  SURVEY_DAILY_LIMIT,
+  SURVEY_NAME_MAX,
+  computeRemainingQuota,
+  getJstDateParts,
+  normalizeSurveyDoc,
+  sanitizeSurveyInput,
+  sortSurveysDesc,
+} from './lib/surveyHelpers.js';
+import {
+  PRESENCE_SCOPE,
+  normalizePresenceDoc,
+  sanitizePresenceUsername,
+  splitPresenceRecords,
+} from './lib/presenceHelpers.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,19 +43,44 @@ const DATA_DIR = path.join(__dirname, '.data');
 const SURVEYS_FILE = path.join(DATA_DIR, 'surveys.json');
 const QUOTAS_FILE = path.join(DATA_DIR, 'quotas.json');
 const ADMINS_FILE = path.join(DATA_DIR, 'admins.json');
+const PRESENCE_FILE = path.join(DATA_DIR, 'presence.json');
 
-const SURVEY_DAILY_LIMIT = 3;
-const SURVEY_NAME_MAX = 20;
-const SURVEY_CONTENT_MAX = 300;
 const ADMIN_SESSION_TTL_MS = 365 * 24 * 60 * 60 * 1000;
 const VISITOR_COOKIE_TTL_MS = 365 * 24 * 60 * 60 * 1000;
 const MAX_CODE_ATTEMPTS = 10;
 const CODE_LOCKOUT_MS = 15 * 60 * 1000;
+const FIRESTORE_CACHE_TTL_MS = 4000;
 
 // Server-only scrypt digest (plaintext code is never stored in code or sent to client)
 const ADMIN_CODE_SALT = 'bt_survey_admin_salt_2026_v1';
 const ADMIN_CODE_HASH_HEX =
   '360694cf83e1ba53e006adbcc6d0700c9b8b1e8ac0f9890ee3760c85fe0aad24c9628127919e84f5dc321115b7a619dc5a84c9a7dcea47824ef50acc9f320d41';
+
+// Server-gated Firestore capability keys matching firestore.rules
+const FIRESTORE_SERVER_AUTH =
+  process.env.FIRESTORE_SERVER_AUTH || 'bt_srv_auth_8f4c29a7d1e63b0594127a6c8e3d9f1b';
+const FIRESTORE_ADMIN_CHANNEL =
+  process.env.FIRESTORE_ADMIN_CHANNEL || 'bt_adm_ch_3e91b5c47a08d2f61495b3c7e0a2d84f';
+
+function initFirestoreClient() {
+  try {
+    const cfgPath = path.join(__dirname, 'firebase-applet-config.json');
+    if (!fs.existsSync(cfgPath)) return null;
+    const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+    const fbApp = initializeApp(cfg, 'server-sync');
+    return cfg.firestoreDatabaseId
+      ? getFirestore(fbApp, cfg.firestoreDatabaseId)
+      : getFirestore(fbApp);
+  } catch (err) {
+    console.error('Failed to initialize server Firestore client:', err);
+    return null;
+  }
+}
+
+const firestoreDb = initFirestoreClient();
+let adminsCache = { fetchedAt: 0, map: null };
+let quotasCache = { fetchedAt: 0, map: null };
+let presenceCache = { fetchedAt: 0, map: null };
 
 function loadOrCreateServerSecret() {
   try {
@@ -52,7 +105,7 @@ const failedCodeAttempts = new Map();
 
 app.use(express.json({ limit: '8kb' }));
 
-// Block HTTP access to server scripts, security files, rules, and local server data
+// Block HTTP access to server scripts, security files, rules, tests, and local server data
 const BLOCKED_STATIC_PATHS = new Set([
   '/server.js',
   '/package.json',
@@ -60,6 +113,7 @@ const BLOCKED_STATIC_PATHS = new Set([
   '/eslint.config.mjs',
   '/firestore.rules',
   '/firestore.rules.test.ts',
+  '/draft_firestore.rules',
   '/security_spec.md',
   '/firebase-blueprint.json',
 ]);
@@ -71,6 +125,7 @@ app.use((req, res, next) => {
     reqPath.startsWith('/.env') ||
     reqPath.startsWith('/.aistudio') ||
     reqPath.startsWith('/.data') ||
+    reqPath.startsWith('/tests') ||
     reqPath.startsWith('/node_modules')
   ) {
     res.status(404).end();
@@ -197,10 +252,120 @@ function getOrIssueVisitor(req, res) {
   return { visitorId: vid, visitorKey };
 }
 
-function getValidAdminPayload(req) {
+async function loadAdminsMap(forceRefresh = false) {
+  const now = Date.now();
+  if (!forceRefresh && adminsCache.map && now - adminsCache.fetchedAt < FIRESTORE_CACHE_TTL_MS) {
+    return adminsCache.map;
+  }
+
+  const localAdmins = readJsonObject(ADMINS_FILE);
+  if (!firestoreDb) {
+    return localAdmins;
+  }
+
+  try {
+    const q = query(
+      collection(firestoreDb, 'admins'),
+      where('serverAuth', '==', FIRESTORE_SERVER_AUTH)
+    );
+    const snap = await getDocs(q);
+    const map = {};
+    snap.forEach((docSnap) => {
+      const data = docSnap.data() || {};
+      map[docSnap.id] = {
+        verified: Boolean(data.verified),
+        username: typeof data.username === 'string' ? data.username : 'プレイヤー',
+        existsInFirestore: true,
+      };
+    });
+    adminsCache = { fetchedAt: now, map };
+
+    // Keep local cache synchronized with Firestore source of truth
+    const syncedLocal = {};
+    for (const [vid, entry] of Object.entries(map)) {
+      if (entry.verified) {
+        syncedLocal[vid] = { verified: true, username: entry.username };
+      }
+    }
+    writeJsonAtomic(ADMINS_FILE, syncedLocal);
+    return map;
+  } catch (err) {
+    console.warn('Firestore admins read fallback to local cache:', err?.message || err);
+    return localAdmins;
+  }
+}
+
+async function loadQuotasMap(forceRefresh = false) {
+  const now = Date.now();
+  if (!forceRefresh && quotasCache.map && now - quotasCache.fetchedAt < FIRESTORE_CACHE_TTL_MS) {
+    return quotasCache.map;
+  }
+  if (!firestoreDb) {
+    return {};
+  }
+  try {
+    const q = query(
+      collection(firestoreDb, 'surveyQuotas'),
+      where('serverAuth', '==', FIRESTORE_SERVER_AUTH)
+    );
+    const snap = await getDocs(q);
+    const map = {};
+    snap.forEach((docSnap) => {
+      const data = docSnap.data() || {};
+      map[docSnap.id] = {
+        year: Number(data.year),
+        month: Number(data.month),
+        day: Number(data.day),
+        count: Number(data.count) || 0,
+        existsInFirestore: true,
+      };
+    });
+    quotasCache = { fetchedAt: now, map };
+    return map;
+  } catch (err) {
+    console.warn('Firestore quotas read fallback to local cache:', err?.message || err);
+    return {};
+  }
+}
+
+async function loadPresenceMap(forceRefresh = false) {
+  const now = Date.now();
+  if (!forceRefresh && presenceCache.map && now - presenceCache.fetchedAt < FIRESTORE_CACHE_TTL_MS) {
+    return presenceCache.map;
+  }
+
+  const localPresence = readJsonObject(PRESENCE_FILE);
+  if (!firestoreDb) {
+    return localPresence;
+  }
+
+  try {
+    const q = query(
+      collection(firestoreDb, 'presence'),
+      where('presenceScope', '==', PRESENCE_SCOPE)
+    );
+    const snap = await getDocs(q);
+    const map = {};
+    snap.forEach((docSnap) => {
+      const normalized = normalizePresenceDoc(docSnap.id, docSnap.data());
+      map[docSnap.id] = {
+        ...normalized,
+        existsInFirestore: true,
+      };
+    });
+    presenceCache = { fetchedAt: now, map };
+    writeJsonAtomic(PRESENCE_FILE, map);
+    return map;
+  } catch (err) {
+    console.warn('Firestore presence read fallback to local cache:', err?.message || err);
+    return localPresence;
+  }
+}
+
+async function getValidAdminPayloadAsync(req) {
   const headerToken = req.get('x-admin-key');
   const cookies = parseCookies(req);
-  const admins = readJsonObject(ADMINS_FILE);
+  const admins = await loadAdminsMap();
 
   for (const candidate of [headerToken, cookies.bt_admin]) {
     const payload = verifySignedPayload(candidate);
@@ -224,8 +389,8 @@ function getValidAdminPayload(req) {
   return null;
 }
 
-function isAdminRequest(req) {
-  return Boolean(getValidAdminPayload(req));
+async function isAdminRequestAsync(req) {
+  return Boolean(await getValidAdminPayloadAsync(req));
 }
 
 function verifyAdminCodeDigest(inputCode) {
@@ -243,38 +408,24 @@ function verifyAdminCodeDigest(inputCode) {
   return derived.length === expected.length && crypto.timingSafeEqual(derived, expected);
 }
 
-function getJstDayKey() {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Asia/Tokyo',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(new Date());
-  const map = {};
-  for (const p of parts) {
-    if (p.type !== 'literal') map[p.type] = p.value;
-  }
-  return `${map.year}-${map.month}-${map.day}`;
-}
-
 function getClientIpKey(req) {
   const ip = String(req.ip || req.socket?.remoteAddress || 'unknown');
   return crypto.createHash('sha256').update(ip).digest('hex').slice(0, 16);
 }
 
-function getDailyUsedCount(quotas, visitorId, ipKey, dayKey) {
+function getLocalDailyUsedCount(localQuotas, visitorId, ipKey, dayKey) {
   const vKey = `v:${visitorId}`;
   const iKey = `ip:${ipKey}`;
-  const vCount = quotas[vKey] && quotas[vKey].day === dayKey ? quotas[vKey].count : 0;
-  const iCount = quotas[iKey] && quotas[iKey].day === dayKey ? quotas[iKey].count : 0;
+  const vCount = localQuotas[vKey] && localQuotas[vKey].day === dayKey ? localQuotas[vKey].count : 0;
+  const iCount = localQuotas[iKey] && localQuotas[iKey].day === dayKey ? localQuotas[iKey].count : 0;
   return Math.max(vCount, iCount);
 }
 
-// Admin Status & Code Verification Endpoints (HttpOnly cookie + signed Web Storage Key + server registry)
-app.get('/api/admin/status', (req, res) => {
+// Admin Status & Code Verification Endpoints (HttpOnly cookie + signed Web Storage Key + Firestore)
+app.get('/api/admin/status', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   const visitor = getOrIssueVisitor(req, res);
-  const adminMatch = getValidAdminPayload(req);
+  const adminMatch = await getValidAdminPayloadAsync(req);
   if (adminMatch) {
     const adminKey =
       adminMatch.token ||
@@ -285,13 +436,18 @@ app.get('/api/admin/status', (req, res) => {
         nonce: crypto.randomBytes(8).toString('hex'),
       });
     setHttpOnlyCookie(req, res, 'bt_admin', adminKey, ADMIN_SESSION_TTL_MS);
-    res.json({ isAdmin: true, adminKey, visitorKey: visitor.visitorKey });
+    res.json({
+      isAdmin: true,
+      adminKey,
+      visitorKey: visitor.visitorKey,
+      adminChannel: FIRESTORE_ADMIN_CHANNEL,
+    });
     return;
   }
   res.json({ isAdmin: false, visitorKey: visitor.visitorKey });
 });
 
-app.post('/api/admin/verify-code', (req, res) => {
+app.post('/api/admin/verify-code', async (req, res) => {
   const ipKey = getClientIpKey(req);
   const now = Date.now();
   const attempt = failedCodeAttempts.get(ipKey);
@@ -316,12 +472,45 @@ app.post('/api/admin/verify-code', (req, res) => {
 
   failedCodeAttempts.delete(ipKey);
   const { visitorId, visitorKey } = getOrIssueVisitor(req, res);
-  const admins = readJsonObject(ADMINS_FILE);
-  admins[visitorId] = {
+  const username =
+    (typeof req.body?.username === 'string' ? req.body.username.trim() : '').slice(
+      0,
+      SURVEY_NAME_MAX
+    ) || 'プレイヤー';
+
+  const existingAdmins = await loadAdminsMap(true);
+  if (firestoreDb) {
+    try {
+      const adminRef = doc(firestoreDb, 'admins', visitorId);
+      if (existingAdmins[visitorId]?.existsInFirestore) {
+        await updateDoc(adminRef, {
+          username,
+          verified: true,
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        await setDoc(adminRef, {
+          visitorId,
+          username,
+          verified: true,
+          serverAuth: FIRESTORE_SERVER_AUTH,
+          verifiedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+      adminsCache = { fetchedAt: 0, map: null };
+    } catch (err) {
+      console.error('Failed to persist admin verification in Firestore:', err);
+    }
+  }
+
+  const localAdmins = readJsonObject(ADMINS_FILE);
+  localAdmins[visitorId] = {
     verified: true,
+    username,
     verifiedAt: new Date(now).toISOString(),
   };
-  writeJsonAtomic(ADMINS_FILE, admins);
+  writeJsonAtomic(ADMINS_FILE, localAdmins);
 
   const adminKey = signPayload({
     role: 'admin',
@@ -330,110 +519,356 @@ app.post('/api/admin/verify-code', (req, res) => {
     nonce: crypto.randomBytes(8).toString('hex'),
   });
   setHttpOnlyCookie(req, res, 'bt_admin', adminKey, ADMIN_SESSION_TTL_MS);
-  res.json({ ok: true, isAdmin: true, adminKey, visitorKey });
+  res.json({
+    ok: true,
+    isAdmin: true,
+    adminKey,
+    visitorKey,
+    adminChannel: FIRESTORE_ADMIN_CHANNEL,
+  });
 });
 
-app.post('/api/admin/logout', (req, res) => {
-  const admins = readJsonObject(ADMINS_FILE);
-  let changed = false;
+app.post('/api/admin/logout', async (req, res) => {
+  const localAdmins = readJsonObject(ADMINS_FILE);
+  const targetVids = new Set();
 
-  const adminMatch = getValidAdminPayload(req);
-  if (adminMatch && adminMatch.payload?.vid && admins[adminMatch.payload.vid]) {
-    delete admins[adminMatch.payload.vid];
-    changed = true;
-  }
+  const adminMatch = await getValidAdminPayloadAsync(req);
+  if (adminMatch?.payload?.vid) targetVids.add(adminMatch.payload.vid);
   const visitor = getExistingVisitorFromRequest(req);
-  if (visitor && admins[visitor.visitorId]) {
-    delete admins[visitor.visitorId];
-    changed = true;
+  if (visitor?.visitorId) targetVids.add(visitor.visitorId);
+
+  const existingAdmins = await loadAdminsMap(true);
+  let localChanged = false;
+  for (const vid of targetVids) {
+    if (localAdmins[vid]) {
+      delete localAdmins[vid];
+      localChanged = true;
+    }
+    if (firestoreDb && existingAdmins[vid]?.existsInFirestore) {
+      try {
+        await updateDoc(doc(firestoreDb, 'admins', vid), {
+          verified: false,
+          updatedAt: serverTimestamp(),
+        });
+      } catch (err) {
+        console.error('Failed to update admin logout in Firestore:', err);
+      }
+    }
   }
-  if (changed) {
-    writeJsonAtomic(ADMINS_FILE, admins);
+  adminsCache = { fetchedAt: 0, map: null };
+  if (localChanged) {
+    writeJsonAtomic(ADMINS_FILE, localAdmins);
   }
 
   clearCookie(req, res, 'bt_admin');
   res.json({ ok: true, isAdmin: false });
 });
 
-// Survey Quota, Submission & Admin-Only Read Endpoints
-app.get('/api/surveys/quota', (req, res) => {
+// Survey Quota, Real-Time Firestore Submission & Admin-Only Read Endpoints
+app.get('/api/surveys/quota', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   const { visitorId, visitorKey } = getOrIssueVisitor(req, res);
   const ipKey = getClientIpKey(req);
-  const dayKey = getJstDayKey();
-  const quotas = readJsonObject(QUOTAS_FILE);
-  const used = getDailyUsedCount(quotas, visitorId, ipKey, dayKey);
+  const jst = getJstDateParts();
+
+  const localQuotas = readJsonObject(QUOTAS_FILE);
+  const localUsed = getLocalDailyUsedCount(localQuotas, visitorId, ipKey, jst.dayKey);
+
+  const fsQuotas = await loadQuotasMap();
+  const fsDoc = fsQuotas[visitorId];
+  const fsSameDay =
+    fsDoc && fsDoc.year === jst.year && fsDoc.month === jst.month && fsDoc.day === jst.day;
+  const fsUsed = fsSameDay ? fsDoc.count : 0;
+
+  const used = Math.max(localUsed, fsUsed);
+  const quota = computeRemainingQuota(used, SURVEY_DAILY_LIMIT);
   res.json({
-    used,
-    remaining: Math.max(0, SURVEY_DAILY_LIMIT - used),
-    limit: SURVEY_DAILY_LIMIT,
+    ...quota,
+    dayKey: jst.dayKey,
     visitorKey,
   });
 });
 
-app.post('/api/surveys', (req, res) => {
+app.post('/api/surveys', async (req, res) => {
   const { visitorId, visitorKey } = getOrIssueVisitor(req, res);
   const ipKey = getClientIpKey(req);
-  const dayKey = getJstDayKey();
+  const jst = getJstDateParts();
 
-  const rawName = typeof req.body?.authorName === 'string' ? req.body.authorName.trim() : '';
-  const rawContent = typeof req.body?.content === 'string' ? req.body.content.trim() : '';
-
-  const authorName = (rawName || 'プレイヤー').slice(0, SURVEY_NAME_MAX);
-  const content = rawContent.slice(0, SURVEY_CONTENT_MAX);
-
-  if (!content) {
+  const parsed = sanitizeSurveyInput(req.body?.authorName, req.body?.content);
+  if (!parsed.isValid) {
     res.status(400).json({ ok: false, error: '追加して欲しい内容を入力してください。' });
     return;
   }
 
-  const quotas = readJsonObject(QUOTAS_FILE);
-  const used = getDailyUsedCount(quotas, visitorId, ipKey, dayKey);
+  const localQuotas = readJsonObject(QUOTAS_FILE);
+  const localUsed = getLocalDailyUsedCount(localQuotas, visitorId, ipKey, jst.dayKey);
+
+  const fsQuotas = await loadQuotasMap(true);
+  const fsDoc = fsQuotas[visitorId];
+  const fsSameDay =
+    fsDoc && fsDoc.year === jst.year && fsDoc.month === jst.month && fsDoc.day === jst.day;
+  const fsUsed = fsSameDay ? fsDoc.count : 0;
+
+  const used = Math.max(localUsed, fsUsed);
   if (used >= SURVEY_DAILY_LIMIT) {
     res.status(429).json({
       ok: false,
       error: '本日の送信上限（1日3回まで）に達しました。また明日お送りください。',
-      used,
-      remaining: 0,
-      limit: SURVEY_DAILY_LIMIT,
+      ...computeRemainingQuota(used, SURVEY_DAILY_LIMIT),
+      dayKey: jst.dayKey,
       visitorKey,
     });
     return;
   }
 
-  const nextUsed = used + 1;
-  quotas[`v:${visitorId}`] = { day: dayKey, count: nextUsed };
-  quotas[`ip:${ipKey}`] = { day: dayKey, count: nextUsed };
-  writeJsonAtomic(QUOTAS_FILE, quotas);
+  const surveyId = crypto.randomUUID();
+  const isAdminVerified = await isAdminRequestAsync(req);
+  const nextLocalUsed = used + 1;
+  const nextFsCount = fsSameDay ? fsUsed + 1 : 1;
+  const createdAtIso = new Date().toISOString();
+
+  if (firestoreDb) {
+    try {
+      const batch = writeBatch(firestoreDb);
+      const quotaRef = doc(firestoreDb, 'surveyQuotas', visitorId);
+      const surveyRef = doc(firestoreDb, 'surveys', surveyId);
+
+      batch.set(quotaRef, {
+        visitorId,
+        year: jst.year,
+        month: jst.month,
+        day: jst.day,
+        count: nextFsCount,
+        lastSurveyId: surveyId,
+        serverAuth: FIRESTORE_SERVER_AUTH,
+        updatedAt: serverTimestamp(),
+      });
+
+      batch.set(surveyRef, {
+        visitorId,
+        authorName: parsed.authorName,
+        content: parsed.content,
+        isAdminVerified,
+        adminChannel: FIRESTORE_ADMIN_CHANNEL,
+        createdAt: serverTimestamp(),
+      });
+
+      await batch.commit();
+      quotasCache = { fetchedAt: 0, map: null };
+    } catch (err) {
+      console.error('Failed to save survey in Firestore:', err);
+      res.status(502).json({
+        ok: false,
+        error: 'Firebaseへの保存に失敗しました。少し時間をおいて再度お試しください。',
+      });
+      return;
+    }
+  }
+
+  localQuotas[`v:${visitorId}`] = { day: jst.dayKey, count: nextLocalUsed };
+  localQuotas[`ip:${ipKey}`] = { day: jst.dayKey, count: nextLocalUsed };
+  writeJsonAtomic(QUOTAS_FILE, localQuotas);
 
   const surveys = readJsonArray(SURVEYS_FILE);
   const entry = {
-    id: crypto.randomUUID(),
-    authorName,
-    content,
-    isAdminVerified: isAdminRequest(req),
-    createdAt: new Date().toISOString(),
+    id: surveyId,
+    authorName: parsed.authorName,
+    content: parsed.content,
+    isAdminVerified,
+    createdAt: createdAtIso,
   };
   surveys.unshift(entry);
   writeJsonAtomic(SURVEYS_FILE, surveys.slice(0, 500));
 
   res.status(201).json({
     ok: true,
-    used: nextUsed,
-    remaining: Math.max(0, SURVEY_DAILY_LIMIT - nextUsed),
-    limit: SURVEY_DAILY_LIMIT,
+    id: surveyId,
+    authorName: parsed.authorName,
+    content: parsed.content,
+    isAdminVerified,
+    createdAt: createdAtIso,
+    ...computeRemainingQuota(nextLocalUsed, SURVEY_DAILY_LIMIT),
+    dayKey: jst.dayKey,
     visitorKey,
   });
 });
 
-app.get('/api/surveys', (req, res) => {
+app.get('/api/surveys', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
-  if (!isAdminRequest(req)) {
+  if (!(await isAdminRequestAsync(req))) {
     res.status(403).json({ ok: false, error: '管理者認証が必要です。' });
     return;
   }
+
+  if (firestoreDb) {
+    try {
+      const q = query(
+        collection(firestoreDb, 'surveys'),
+        where('adminChannel', '==', FIRESTORE_ADMIN_CHANNEL)
+      );
+      const snap = await getDocs(q);
+      const items = [];
+      snap.forEach((docSnap) => {
+        items.push(normalizeSurveyDoc(docSnap.id, docSnap.data()));
+      });
+      res.json({ ok: true, items: sortSurveysDesc(items) });
+      return;
+    } catch (err) {
+      console.warn('Firestore surveys list fallback to local cache:', err?.message || err);
+    }
+  }
+
   const surveys = readJsonArray(SURVEYS_FILE);
   res.json({ ok: true, items: surveys });
+});
+
+// Real-Time Presence (Online + Daily JST Login Reset at 00:00 JST)
+app.get('/api/presence', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const existingVisitor = getExistingVisitorFromRequest(req);
+  const map = await loadPresenceMap();
+  const records = Object.values(map);
+  const split = splitPresenceRecords(
+    records,
+    Date.now(),
+    existingVisitor?.visitorId || ''
+  );
+  res.json({ ok: true, records, ...split });
+});
+
+app.post('/api/presence/heartbeat', async (req, res) => {
+  const { visitorId, visitorKey } = getOrIssueVisitor(req, res);
+  const username = sanitizePresenceUsername(req.body?.username);
+  const isAdminVerified = await isAdminRequestAsync(req);
+  const dayKey = getJstDateParts().dayKey;
+  const nowMs = Date.now();
+  const nowIso = new Date(nowMs).toISOString();
+
+  const existingMap = await loadPresenceMap();
+  const existingDoc = existingMap[visitorId];
+
+  if (firestoreDb) {
+    try {
+      const batch = writeBatch(firestoreDb);
+      const gateRef = doc(firestoreDb, 'presenceGates', visitorId);
+      const presenceRef = doc(firestoreDb, 'presence', visitorId);
+
+      batch.set(gateRef, {
+        visitorId,
+        serverAuth: FIRESTORE_SERVER_AUTH,
+        updatedAt: serverTimestamp(),
+      });
+
+      if (!existingDoc || !existingDoc.existsInFirestore) {
+        batch.set(presenceRef, {
+          visitorId,
+          username,
+          isAdminVerified,
+          dayKey,
+          isOnline: true,
+          presenceScope: PRESENCE_SCOPE,
+          lastLoginAt: serverTimestamp(),
+          lastSeenAt: serverTimestamp(),
+        });
+      } else if (existingDoc.dayKey !== dayKey) {
+        batch.update(presenceRef, {
+          username,
+          isAdminVerified,
+          dayKey,
+          isOnline: true,
+          lastLoginAt: serverTimestamp(),
+          lastSeenAt: serverTimestamp(),
+        });
+      } else {
+        batch.update(presenceRef, {
+          username,
+          isAdminVerified,
+          isOnline: true,
+          lastSeenAt: serverTimestamp(),
+        });
+      }
+
+      await batch.commit();
+      presenceCache = { fetchedAt: 0, map: null };
+    } catch (err) {
+      console.error('Failed to persist presence heartbeat in Firestore:', err);
+    }
+  }
+
+  const localPresence = readJsonObject(PRESENCE_FILE);
+  const prevLocal = localPresence[visitorId];
+  const lastLoginAt =
+    existingDoc && existingDoc.dayKey === dayKey && existingDoc.lastLoginAt
+      ? existingDoc.lastLoginAt
+      : prevLocal && prevLocal.dayKey === dayKey && prevLocal.lastLoginAt
+        ? prevLocal.lastLoginAt
+        : nowIso;
+  const lastLoginAtMs =
+    existingDoc && existingDoc.dayKey === dayKey && existingDoc.lastLoginAtMs
+      ? existingDoc.lastLoginAtMs
+      : prevLocal && prevLocal.dayKey === dayKey && prevLocal.lastLoginAtMs
+        ? prevLocal.lastLoginAtMs
+        : nowMs;
+
+  const record = {
+    visitorId,
+    username,
+    isAdminVerified,
+    dayKey,
+    isOnline: true,
+    lastLoginAt,
+    lastLoginAtMs,
+    lastSeenAt: nowIso,
+    lastSeenAtMs: nowMs,
+    existsInFirestore: Boolean(existingDoc?.existsInFirestore || firestoreDb),
+  };
+  localPresence[visitorId] = record;
+  writeJsonAtomic(PRESENCE_FILE, localPresence);
+
+  res.json({ ok: true, visitorId, visitorKey, dayKey, record });
+});
+
+app.post('/api/presence/leave', async (req, res) => {
+  const bodyToken = typeof req.body?.visitorKey === 'string' ? req.body.visitorKey : '';
+  const candidate = req.get('x-visitor-key') || parseCookies(req).bt_visitor || bodyToken;
+  const parsed = verifySignedPayload(candidate);
+  if (!parsed || typeof parsed.vid !== 'string' || !/^[a-f0-9]{24}$/.test(parsed.vid)) {
+    res.json({ ok: true });
+    return;
+  }
+
+  const visitorId = parsed.vid;
+  const existingMap = await loadPresenceMap();
+  const existingDoc = existingMap[visitorId];
+
+  if (firestoreDb && existingDoc?.existsInFirestore) {
+    try {
+      const batch = writeBatch(firestoreDb);
+      batch.set(doc(firestoreDb, 'presenceGates', visitorId), {
+        visitorId,
+        serverAuth: FIRESTORE_SERVER_AUTH,
+        updatedAt: serverTimestamp(),
+      });
+      batch.update(doc(firestoreDb, 'presence', visitorId), {
+        isOnline: false,
+        lastSeenAt: serverTimestamp(),
+      });
+      await batch.commit();
+      presenceCache = { fetchedAt: 0, map: null };
+    } catch (err) {
+      console.error('Failed to update presence leave in Firestore:', err);
+    }
+  }
+
+  const localPresence = readJsonObject(PRESENCE_FILE);
+  if (localPresence[visitorId]) {
+    localPresence[visitorId].isOnline = false;
+    localPresence[visitorId].lastSeenAt = new Date().toISOString();
+    localPresence[visitorId].lastSeenAtMs = Date.now();
+    writeJsonAtomic(PRESENCE_FILE, localPresence);
+  }
+
+  res.json({ ok: true });
 });
 
 app.use(express.static(__dirname));

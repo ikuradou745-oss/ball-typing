@@ -50,6 +50,15 @@
             <span aria-hidden="true">👑</span>
           </button>
           <button
+            id="open-presence-btn"
+            type="button"
+            class="arcade-btn-sm hud-presence-btn"
+            aria-label="ログイン状況を見る"
+            title="今日・現在ログイン中のプレイヤー"
+          >
+            <span aria-hidden="true">👥</span>
+          </button>
+          <button
             id="open-survey-btn"
             type="button"
             class="arcade-btn-sm hud-survey-btn"
@@ -860,6 +869,64 @@
               </button>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Real-Time Login Presence Modal (👥) -->
+    <div
+      id="presence-modal"
+      class="modal-backdrop hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="presence-modal-title"
+    >
+      <div class="arcade-card presence-dialog">
+        <div class="modal-header modal-header-between">
+          <h2 id="presence-modal-title" class="modal-title arcade-outline-white">ログイン状況</h2>
+          <button
+            id="presence-x-btn"
+            type="button"
+            class="arcade-btn-sm btn-close-x"
+            aria-label="閉じる"
+          >
+            <svg viewBox="0 0 24 24" class="icon-svg" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 6 6 18" />
+              <path d="m6 6 12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="presence-body">
+          <div class="presence-top-bar">
+            <span class="presence-live-pill">
+              <span class="presence-dot-online" aria-hidden="true"></span>
+              <span>リアルタイム同期中</span>
+            </span>
+            <span id="presence-day-badge" class="presence-day-badge">毎日 00:00 更新</span>
+          </div>
+
+          <section class="presence-section" aria-labelledby="presence-online-heading">
+            <div class="presence-section-header">
+              <h3 id="presence-online-heading" class="presence-section-title">現在ログインしている人</h3>
+              <span id="presence-online-count" class="presence-count-badge presence-count-online">0人</span>
+            </div>
+            <ul id="presence-online-list" class="presence-list"></ul>
+          </section>
+
+          <section class="presence-section" aria-labelledby="presence-today-heading">
+            <div class="presence-section-header">
+              <h3 id="presence-today-heading" class="presence-section-title">今日ログインした人</h3>
+              <span id="presence-today-count" class="presence-count-badge">0人</span>
+            </div>
+            <ul id="presence-today-list" class="presence-list"></ul>
+          </section>
+        </div>
+
+        <div class="modal-footer modal-footer-center">
+          <button id="presence-close-btn" type="button" class="arcade-btn btn-gold btn-close-notice">
+            閉じる
+          </button>
         </div>
       </div>
     </div>

@@ -19,23 +19,12 @@ service cloud.firestore {
       return resource.data;
     }
 
-    function isSignedIn() {
-      return request.auth != null;
+    function isServerAuth(val) {
+      return val is string && val == 'bt_srv_auth_8f4c29a7d1e63b0594127a6c8e3d9f1b';
     }
 
-    function isVerifiedUser() {
-      return isSignedIn() && request.auth.token.email_verified == true;
-    }
-
-    function isOwner(userId) {
-      return isVerifiedUser() && request.auth.uid == userId;
-    }
-
-    function isAdmin() {
-      return isVerifiedUser() && (
-        request.auth.token.email == 'ikuradou745@gmail.com' ||
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
-      );
+    function isAdminChannel(val) {
+      return val is string && val == 'bt_adm_ch_3e91b5c47a08d2f61495b3c7e0a2d84f';
     }
 
     function jstTime() {
@@ -43,27 +32,27 @@ service cloud.firestore {
     }
 
     function isValidSurvey(data) {
-      return data.keys().hasAll(['uid', 'authorName', 'content', 'createdAt']) &&
-        data.keys().hasOnly(['uid', 'authorName', 'content', 'createdAt']) &&
-        isValidId(data.uid) &&
-        data.uid == request.auth.uid &&
+      return data.keys().hasAll(['visitorId', 'authorName', 'content', 'isAdminVerified', 'adminChannel', 'createdAt']) &&
+        data.keys().hasOnly(['visitorId', 'authorName', 'content', 'isAdminVerified', 'adminChannel', 'createdAt']) &&
+        isValidId(data.visitorId) &&
         data.authorName is string &&
         data.authorName.size() >= 1 &&
         data.authorName.size() <= 20 &&
         data.content is string &&
         data.content.size() >= 1 &&
         data.content.size() <= 300 &&
+        data.isAdminVerified is bool &&
+        isAdminChannel(data.adminChannel) &&
         data.createdAt is timestamp &&
         data.createdAt == request.time;
     }
 
-    function isValidSurveyQuota(data, userId) {
+    function isValidSurveyQuota(data, visitorId) {
       let jst = jstTime();
-      return data.keys().hasAll(['uid', 'year', 'month', 'day', 'count', 'lastSurveyId', 'updatedAt']) &&
-        data.keys().hasOnly(['uid', 'year', 'month', 'day', 'count', 'lastSurveyId', 'updatedAt']) &&
-        isValidId(data.uid) &&
-        data.uid == userId &&
-        data.uid == request.auth.uid &&
+      return data.keys().hasAll(['visitorId', 'year', 'month', 'day', 'count', 'lastSurveyId', 'serverAuth', 'updatedAt']) &&
+        data.keys().hasOnly(['visitorId', 'year', 'month', 'day', 'count', 'lastSurveyId', 'serverAuth', 'updatedAt']) &&
+        isValidId(data.visitorId) &&
+        data.visitorId == visitorId &&
         data.year is int &&
         data.month is int &&
         data.day is int &&
@@ -74,6 +63,7 @@ service cloud.firestore {
         data.count >= 1 &&
         data.count <= 3 &&
         isValidId(data.lastSurveyId) &&
+        isServerAuth(data.serverAuth) &&
         data.updatedAt is timestamp &&
         data.updatedAt == request.time;
     }
@@ -85,13 +75,66 @@ service cloud.firestore {
         oldData.day == jst.day();
     }
 
-    function isQuotaBatchSynchronized(surveyId) {
-      let quotaAfter = getAfter(/databases/$(database)/documents/surveyQuotas/$(request.auth.uid)).data;
-      return quotaAfter.uid == request.auth.uid &&
+    function isQuotaBatchSynchronized(surveyId, visitorId) {
+      let quotaAfter = getAfter(/databases/$(database)/documents/surveyQuotas/$(visitorId)).data;
+      return quotaAfter.visitorId == visitorId &&
+        isServerAuth(quotaAfter.serverAuth) &&
         quotaAfter.updatedAt == request.time &&
         quotaAfter.lastSurveyId == surveyId &&
         quotaAfter.count >= 1 &&
         quotaAfter.count <= 3;
+    }
+
+    function isValidAdmin(data, visitorId) {
+      return data.keys().hasAll(['visitorId', 'username', 'verified', 'serverAuth', 'verifiedAt', 'updatedAt']) &&
+        data.keys().hasOnly(['visitorId', 'username', 'verified', 'serverAuth', 'verifiedAt', 'updatedAt']) &&
+        isValidId(data.visitorId) &&
+        data.visitorId == visitorId &&
+        data.username is string &&
+        data.username.size() >= 1 &&
+        data.username.size() <= 20 &&
+        data.verified is bool &&
+        isServerAuth(data.serverAuth) &&
+        data.verifiedAt is timestamp &&
+        data.updatedAt is timestamp &&
+        data.updatedAt == request.time;
+    }
+
+    function isValidPresenceGate(data, visitorId) {
+      return data.keys().hasAll(['visitorId', 'serverAuth', 'updatedAt']) &&
+        data.keys().hasOnly(['visitorId', 'serverAuth', 'updatedAt']) &&
+        isValidId(data.visitorId) &&
+        data.visitorId == visitorId &&
+        isServerAuth(data.serverAuth) &&
+        data.updatedAt is timestamp &&
+        data.updatedAt == request.time;
+    }
+
+    function isValidPresence(data, visitorId) {
+      return data.keys().hasAll(['visitorId', 'username', 'isAdminVerified', 'dayKey', 'isOnline', 'presenceScope', 'lastLoginAt', 'lastSeenAt']) &&
+        data.keys().hasOnly(['visitorId', 'username', 'isAdminVerified', 'dayKey', 'isOnline', 'presenceScope', 'lastLoginAt', 'lastSeenAt']) &&
+        isValidId(data.visitorId) &&
+        data.visitorId == visitorId &&
+        data.username is string &&
+        data.username.size() >= 1 &&
+        data.username.size() <= 20 &&
+        data.isAdminVerified is bool &&
+        data.dayKey is string &&
+        data.dayKey.size() == 10 &&
+        data.dayKey.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$') &&
+        data.isOnline is bool &&
+        data.presenceScope is string &&
+        data.presenceScope == 'public_lobby' &&
+        data.lastLoginAt is timestamp &&
+        data.lastSeenAt is timestamp &&
+        data.lastSeenAt == request.time;
+    }
+
+    function isPresenceGateSynchronized(visitorId) {
+      let gateAfter = getAfter(/databases/$(database)/documents/presenceGates/$(visitorId)).data;
+      return gateAfter.visitorId == visitorId &&
+        isServerAuth(gateAfter.serverAuth) &&
+        gateAfter.updatedAt == request.time;
     }
 
     // Connection validation probe (get only for exact 'connection' doc)
@@ -100,25 +143,34 @@ service cloud.firestore {
       allow list, create, update, delete: if false;
     }
 
-    // Admin registry (read-only by admins/self, managed via Firebase console)
-    match /admins/{userId} {
-      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
-      allow list, create, update, delete: if false;
+    // Admin registry (never get-able directly, server-gated list & write)
+    match /admins/{visitorId} {
+      allow get: if false;
+      allow list: if resource.data.serverAuth == 'bt_srv_auth_8f4c29a7d1e63b0594127a6c8e3d9f1b';
+      allow create: if isValidId(visitorId) &&
+        isValidAdmin(incoming(), visitorId) &&
+        incoming().verifiedAt == request.time;
+      allow update: if isValidId(visitorId) &&
+        isValidAdmin(incoming(), visitorId) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['username', 'verified', 'updatedAt']) &&
+        incoming().visitorId == existing().visitorId &&
+        incoming().serverAuth == existing().serverAuth &&
+        incoming().verifiedAt == existing().verifiedAt;
+      allow delete: if false;
     }
 
-    // Per-user daily JST survey quota (max 3 per day, 1 survey per increment)
-    match /surveyQuotas/{userId} {
-      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
-      allow list: if false;
-      allow create: if isValidId(userId) &&
-        isOwner(userId) &&
-        isValidSurveyQuota(incoming(), userId) &&
+    // Per-visitor daily JST survey quota (max 3 per day, 1 survey per atomic batch)
+    match /surveyQuotas/{visitorId} {
+      allow get: if false;
+      allow list: if resource.data.serverAuth == 'bt_srv_auth_8f4c29a7d1e63b0594127a6c8e3d9f1b';
+      allow create: if isValidId(visitorId) &&
+        isValidSurveyQuota(incoming(), visitorId) &&
         incoming().count == 1;
-      allow update: if isValidId(userId) &&
-        isOwner(userId) &&
-        isValidSurveyQuota(incoming(), userId) &&
+      allow update: if isValidId(visitorId) &&
+        isValidSurveyQuota(incoming(), visitorId) &&
         incoming().diff(existing()).affectedKeys().hasOnly(['year', 'month', 'day', 'count', 'lastSurveyId', 'updatedAt']) &&
-        incoming().uid == existing().uid &&
+        incoming().visitorId == existing().visitorId &&
+        incoming().serverAuth == existing().serverAuth &&
         (
           (isSameJstDay(existing()) && incoming().count == existing().count + 1 && incoming().count <= 3) ||
           (!isSameJstDay(existing()) && incoming().count == 1)
@@ -126,16 +178,44 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Survey submissions: any verified user can create (1-to-1 coupled to daily quota), ONLY admin can read/list
+    // Survey submissions: atomic write gated by server quota batch; real-time list gated by adminChannel
     match /surveys/{surveyId} {
-      allow get: if isValidId(surveyId) && isAdmin();
-      allow list: if isAdmin();
+      allow get: if false;
+      allow list: if resource.data.adminChannel == 'bt_adm_ch_3e91b5c47a08d2f61495b3c7e0a2d84f';
       allow create: if isValidId(surveyId) &&
-        isVerifiedUser() &&
         isValidSurvey(incoming()) &&
-        isQuotaBatchSynchronized(surveyId);
-      allow update: if false;
-      allow delete: if isValidId(surveyId) && isAdmin();
+        isQuotaBatchSynchronized(surveyId, incoming().visitorId);
+      allow update, delete: if false;
+    }
+
+    // Server-only presence write gate (never readable by browsers)
+    match /presenceGates/{visitorId} {
+      allow get, list: if false;
+      allow create: if isValidId(visitorId) &&
+        isValidPresenceGate(incoming(), visitorId);
+      allow update: if isValidId(visitorId) &&
+        isValidPresenceGate(incoming(), visitorId) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['updatedAt']) &&
+        incoming().visitorId == existing().visitorId &&
+        incoming().serverAuth == existing().serverAuth;
+      allow delete: if false;
+    }
+
+    // Real-time online & daily JST login presence (writes gated by presenceGates atomic batch)
+    match /presence/{visitorId} {
+      allow get: if false;
+      allow list: if resource.data.presenceScope == 'public_lobby';
+      allow create: if isValidId(visitorId) &&
+        isValidPresence(incoming(), visitorId) &&
+        incoming().lastLoginAt == request.time &&
+        isPresenceGateSynchronized(visitorId);
+      allow update: if isValidId(visitorId) &&
+        isValidPresence(incoming(), visitorId) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['username', 'isAdminVerified', 'dayKey', 'isOnline', 'lastLoginAt', 'lastSeenAt']) &&
+        incoming().visitorId == existing().visitorId &&
+        incoming().presenceScope == existing().presenceScope &&
+        isPresenceGateSynchronized(visitorId);
+      allow delete: if false;
     }
   }
 }

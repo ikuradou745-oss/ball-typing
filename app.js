@@ -5,14 +5,24 @@ import {
   getNextRarity,
 } from './assets/ballImages.js';
 import {
+  PRESENCE_HEARTBEAT_INTERVAL_MS,
   SURVEY_CONTENT_MAX,
   SURVEY_DAILY_LIMIT,
   ensureFirebase,
   fetchAdminStatus,
   fetchAdminSurveys,
+  fetchPresenceSnapshot,
+  getJstDateParts,
+  getMsUntilNextJstMidnight,
+  getSelfVisitorId,
   getTodaySurveyQuota,
   logoutAdminSession,
+  sendPresenceHeartbeat,
+  sendPresenceLeave,
+  splitPresenceRecords,
   submitSurveyFeedback,
+  subscribeAdminSurveys,
+  subscribePresence,
   verifyAdminCodeOnServer,
 } from './firebaseClient.js';
 
@@ -476,6 +486,7 @@ const topHudEl = document.querySelector('.top-hud');
 const homeTopLeftActions = document.getElementById('home-top-left-actions');
 const openEnemyGuideBtn = document.getElementById('open-enemy-guide-btn');
 const openAdminCrownBtn = document.getElementById('open-admin-crown-btn');
+const openPresenceBtn = document.getElementById('open-presence-btn');
 const openSurveyBtn = document.getElementById('open-survey-btn');
 const homeScreenEl = document.getElementById('home-screen');
 const modeScreenEl = document.getElementById('mode-screen');
@@ -602,6 +613,15 @@ const crownCancelBtn = document.getElementById('crown-cancel-btn');
 const crownCodeSubmitBtn = document.getElementById('crown-code-submit-btn');
 const crownLogoutBtn = document.getElementById('crown-logout-btn');
 const crownDoneBtn = document.getElementById('crown-done-btn');
+
+const presenceModal = document.getElementById('presence-modal');
+const presenceXBtn = document.getElementById('presence-x-btn');
+const presenceCloseBtn = document.getElementById('presence-close-btn');
+const presenceDayBadge = document.getElementById('presence-day-badge');
+const presenceOnlineCount = document.getElementById('presence-online-count');
+const presenceOnlineList = document.getElementById('presence-online-list');
+const presenceTodayCount = document.getElementById('presence-today-count');
+const presenceTodayList = document.getElementById('presence-today-list');
 
 const pixelCells = [];
 const swatchButtons = [];
@@ -1803,6 +1823,10 @@ window.addEventListener('keydown', (e) => {
       closeAdminCrownModal();
       return;
     }
+    if (!presenceModal.classList.contains('hidden')) {
+      closePresenceModal();
+      return;
+    }
     if (!enemyGuideModal.classList.contains('hidden')) {
       closeEnemyGuideModal();
       return;
@@ -1887,6 +1911,7 @@ settingsSaveBtn.addEventListener('click', () => {
   saveProfile(profile);
   renderHud();
   settingsModal.classList.add('hidden');
+  triggerPresenceHeartbeat();
 });
 
 tabBtnSettings.addEventListener('click', () => {
@@ -2019,10 +2044,11 @@ async function openAdminCrownModal() {
   playOpenSound(profile.volume);
   crownCodeInput.value = '';
   setCrownCodeError('');
+  renderCrownModalView();
+  adminCrownModal.classList.remove('hidden');
   isAdminAuthenticated = await fetchAdminStatus();
   renderHud();
   renderCrownModalView();
-  adminCrownModal.classList.remove('hidden');
   if (!isAdminAuthenticated) {
     crownCodeInput.focus();
   }
@@ -2046,12 +2072,13 @@ async function handleCrownCodeSubmit() {
   crownCodeSubmitBtn.disabled = true;
   setCrownCodeError('');
   try {
-    await verifyAdminCodeOnServer(code);
+    await verifyAdminCodeOnServer(code, profile.username);
     isAdminAuthenticated = true;
     crownCodeInput.value = '';
     playSaveSound(profile.volume);
     renderHud();
     renderCrownModalView();
+    triggerPresenceHeartbeat();
   } catch (err) {
     playErrorSound(profile.volume);
     setCrownCodeError(err instanceof Error ? err.message : 'コードが正しくありません。');
@@ -2076,10 +2103,12 @@ crownCodeInput.addEventListener('keydown', (e) => {
 });
 crownLogoutBtn.addEventListener('click', async () => {
   playClickSound(profile.volume);
+  stopAdminSurveySubscription();
   await logoutAdminSession();
   isAdminAuthenticated = false;
   renderHud();
   closeAdminCrownModal();
+  triggerPresenceHeartbeat();
 });
 
 // Survey & Admin Modal (No Google Login; Name uses profile.username from Settings)
@@ -2119,9 +2148,19 @@ async function openSurveyModal() {
   await refreshSurveyQuota();
 }
 
+let unsubscribeAdminSurveys = null;
+
+function stopAdminSurveySubscription() {
+  if (typeof unsubscribeAdminSurveys === 'function') {
+    unsubscribeAdminSurveys();
+    unsubscribeAdminSurveys = null;
+  }
+}
+
 function closeSurveyModal() {
   if (surveyModal.classList.contains('hidden')) return;
   playClickSound(profile.volume);
+  stopAdminSurveySubscription();
   adminSurveyList.innerHTML = '';
   surveySubView = 'form';
   surveyModal.classList.add('hidden');
@@ -2158,45 +2197,102 @@ function createVerifiedBadgeElement() {
   return badge;
 }
 
-async function loadAndRenderAdminSurveys() {
+function renderAdminSurveyItems(items) {
+  adminSurveyList.innerHTML = '';
+  if (!Array.isArray(items) || items.length === 0) {
+    adminListStatus.textContent = 'まだアンケートは届いていません。';
+    adminListStatus.classList.remove('survey-feedback-error', 'hidden');
+    return;
+  }
+  adminListStatus.classList.add('hidden');
+  items.forEach((item) => {
+    const li = document.createElement('li');
+    li.className = 'admin-survey-item';
+
+    const line = document.createElement('div');
+    line.className = 'admin-survey-line';
+    const nameSpan = document.createElement('span');
+    nameSpan.textContent = item.authorName || 'プレイヤー';
+    line.appendChild(nameSpan);
+    if (item.isAdminVerified) {
+      line.appendChild(document.createTextNode(' '));
+      line.appendChild(createVerifiedBadgeElement());
+    }
+    line.appendChild(document.createTextNode(`：${item.content || ''}`));
+    li.appendChild(line);
+
+    const timeText = formatSurveyDate(item.createdAt);
+    if (timeText) {
+      const timeEl = document.createElement('div');
+      timeEl.className = 'admin-survey-time';
+      timeEl.textContent = timeText;
+      li.appendChild(timeEl);
+    }
+
+    adminSurveyList.appendChild(li);
+  });
+}
+
+async function startAdminSurveyRealtimeView() {
+  stopAdminSurveySubscription();
   adminRefreshBtn.disabled = true;
-  adminListStatus.textContent = '読み込み中...';
+  adminListStatus.textContent = 'リアルタイム読み込み中...';
   adminListStatus.classList.remove('survey-feedback-error', 'hidden');
   adminSurveyList.innerHTML = '';
 
   try {
-    const items = await fetchAdminSurveys();
-    if (items.length === 0) {
-      adminListStatus.textContent = 'まだアンケートは届いていません。';
-    } else {
-      adminListStatus.classList.add('hidden');
-      items.forEach((item) => {
-        const li = document.createElement('li');
-        li.className = 'admin-survey-item';
-
-        const line = document.createElement('div');
-        line.className = 'admin-survey-line';
-        const nameSpan = document.createElement('span');
-        nameSpan.textContent = item.authorName || 'プレイヤー';
-        line.appendChild(nameSpan);
-        if (item.isAdminVerified) {
-          line.appendChild(document.createTextNode(' '));
-          line.appendChild(createVerifiedBadgeElement());
+    unsubscribeAdminSurveys = await subscribeAdminSurveys(
+      (items) => {
+        adminRefreshBtn.disabled = false;
+        renderAdminSurveyItems(items);
+      },
+      async () => {
+        try {
+          const items = await fetchAdminSurveys();
+          renderAdminSurveyItems(items);
+        } catch (err) {
+          if (err && err.status === 403) {
+            isAdminAuthenticated = false;
+            renderHud();
+            surveySubView = 'form';
+            renderSurveyView();
+            setSurveyFeedback('管理者ではないため閲覧できません。', true);
+            return;
+          }
+          adminListStatus.textContent =
+            err instanceof Error ? err.message : 'アンケートの読み込みに失敗しました。';
+          adminListStatus.classList.add('survey-feedback-error');
+          adminListStatus.classList.remove('hidden');
+        } finally {
+          adminRefreshBtn.disabled = false;
         }
-        line.appendChild(document.createTextNode(`：${item.content || ''}`));
-        li.appendChild(line);
-
-        const timeText = formatSurveyDate(item.createdAt);
-        if (timeText) {
-          const timeEl = document.createElement('div');
-          timeEl.className = 'admin-survey-time';
-          timeEl.textContent = timeText;
-          li.appendChild(timeEl);
-        }
-
-        adminSurveyList.appendChild(li);
-      });
+      }
+    );
+  } catch (err) {
+    adminRefreshBtn.disabled = false;
+    if (err && err.status === 403) {
+      isAdminAuthenticated = false;
+      renderHud();
+      surveySubView = 'form';
+      renderSurveyView();
+      setSurveyFeedback('管理者ではないため閲覧できません。', true);
+      return;
     }
+    adminListStatus.textContent =
+      err instanceof Error ? err.message : 'アンケートの読み込みに失敗しました。';
+    adminListStatus.classList.add('survey-feedback-error');
+    adminListStatus.classList.remove('hidden');
+  }
+}
+
+async function loadAndRenderAdminSurveys() {
+  adminRefreshBtn.disabled = true;
+  adminListStatus.textContent = '読み込み中...';
+  adminListStatus.classList.remove('survey-feedback-error', 'hidden');
+
+  try {
+    const items = await fetchAdminSurveys();
+    renderAdminSurveyItems(items);
   } catch (err) {
     if (err && err.status === 403) {
       isAdminAuthenticated = false;
@@ -2274,7 +2370,7 @@ openAdminSurveyBtn.addEventListener('click', async () => {
   playOpenSound(profile.volume);
   surveySubView = 'admin-list';
   renderSurveyView();
-  await loadAndRenderAdminSurveys();
+  await startAdminSurveyRealtimeView();
 });
 
 adminRefreshBtn.addEventListener('click', () => {
@@ -2284,15 +2380,265 @@ adminRefreshBtn.addEventListener('click', () => {
 
 adminBackFromListBtn.addEventListener('click', () => {
   playClickSound(profile.volume);
+  stopAdminSurveySubscription();
   surveySubView = 'form';
   renderSurveyView();
+});
+
+// Real-Time Presence Modal (👥) & Heartbeat Lifecycle
+let latestPresenceRecords = [];
+let unsubscribePresence = null;
+let presenceRefreshTimer = null;
+let presenceHeartbeatTimer = null;
+let presenceMidnightTimer = null;
+
+function formatPresenceTime(isoString) {
+  if (!isoString) return '';
+  try {
+    return new Intl.DateTimeFormat('ja-JP', {
+      timeZone: 'Asia/Tokyo',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(new Date(isoString));
+  } catch {
+    return '';
+  }
+}
+
+function buildPresenceListItem(record, showOnlineStyle) {
+  const li = document.createElement('li');
+  li.className = 'presence-item';
+
+  const main = document.createElement('div');
+  main.className = 'presence-item-main';
+
+  const dot = document.createElement('span');
+  dot.className = record.activeNow ? 'presence-dot-online' : 'presence-dot-offline';
+  dot.setAttribute('aria-hidden', 'true');
+  main.appendChild(dot);
+
+  const nameEl = document.createElement('span');
+  nameEl.className = 'presence-item-name';
+  nameEl.textContent = record.username || 'プレイヤー';
+  main.appendChild(nameEl);
+
+  if (record.isAdminVerified) {
+    main.appendChild(createVerifiedBadgeElement());
+  }
+
+  if (record.isSelf) {
+    const selfTag = document.createElement('span');
+    selfTag.className = 'presence-self-tag';
+    selfTag.textContent = 'あなた';
+    main.appendChild(selfTag);
+  }
+
+  li.appendChild(main);
+
+  const meta = document.createElement('span');
+  meta.className = 'presence-item-meta';
+  if (showOnlineStyle || record.activeNow) {
+    meta.textContent = 'オンライン';
+  } else {
+    const timeStr = formatPresenceTime(record.lastLoginAt || record.lastSeenAt);
+    meta.textContent = timeStr ? `${timeStr} ログイン` : '本日ログイン';
+  }
+  li.appendChild(meta);
+
+  return li;
+}
+
+function renderPresenceLists() {
+  const { todayDayKey, onlineUsers, todayLogins } = splitPresenceRecords(
+    latestPresenceRecords,
+    Date.now(),
+    getSelfVisitorId()
+  );
+
+  presenceDayBadge.textContent = `${todayDayKey}（00:00更新）`;
+  presenceOnlineCount.textContent = `${onlineUsers.length}人`;
+  presenceTodayCount.textContent = `${todayLogins.length}人`;
+
+  presenceOnlineList.innerHTML = '';
+  if (onlineUsers.length === 0) {
+    const emptyEl = document.createElement('li');
+    emptyEl.className = 'presence-empty';
+    emptyEl.textContent = '現在ログインしている人はいません。';
+    presenceOnlineList.appendChild(emptyEl);
+  } else {
+    onlineUsers.forEach((record) => {
+      presenceOnlineList.appendChild(buildPresenceListItem(record, true));
+    });
+  }
+
+  presenceTodayList.innerHTML = '';
+  if (todayLogins.length === 0) {
+    const emptyEl = document.createElement('li');
+    emptyEl.className = 'presence-empty';
+    emptyEl.textContent = '今日ログインした人はまだいません。';
+    presenceTodayList.appendChild(emptyEl);
+  } else {
+    todayLogins.forEach((record) => {
+      presenceTodayList.appendChild(buildPresenceListItem(record, false));
+    });
+  }
+}
+
+function stopPresenceModalSync() {
+  if (typeof unsubscribePresence === 'function') {
+    unsubscribePresence();
+    unsubscribePresence = null;
+  }
+  if (presenceRefreshTimer) {
+    clearInterval(presenceRefreshTimer);
+    presenceRefreshTimer = null;
+  }
+}
+
+async function triggerPresenceHeartbeat() {
+  const data = await sendPresenceHeartbeat(profile.username);
+  if (data && data.record) {
+    const idx = latestPresenceRecords.findIndex((item) => item.visitorId === data.record.visitorId);
+    const updatedRecord = {
+      ...data.record,
+      lastLoginAtMs: data.record.lastLoginAt ? Date.parse(data.record.lastLoginAt) || 0 : 0,
+      lastSeenAtMs: data.record.lastSeenAt ? Date.parse(data.record.lastSeenAt) || 0 : 0,
+    };
+    if (idx >= 0) {
+      latestPresenceRecords = [
+        ...latestPresenceRecords.slice(0, idx),
+        updatedRecord,
+        ...latestPresenceRecords.slice(idx + 1),
+      ];
+    } else {
+      latestPresenceRecords = [updatedRecord, ...latestPresenceRecords];
+    }
+    if (!presenceModal.classList.contains('hidden')) {
+      renderPresenceLists();
+    }
+  }
+  return data;
+}
+
+async function openPresenceModal() {
+  playOpenSound(profile.volume);
+  stopPresenceModalSync();
+  presenceModal.classList.remove('hidden');
+  presenceDayBadge.textContent = `${getJstDateParts().dayKey}（00:00更新）`;
+  renderPresenceLists();
+
+  triggerPresenceHeartbeat().catch(() => {});
+
+  fetchPresenceSnapshot()
+    .then((snapshot) => {
+      if (snapshot && Array.isArray(snapshot.records)) {
+        latestPresenceRecords = snapshot.records.map((rec) => ({
+          ...rec,
+          lastLoginAtMs: rec.lastLoginAt ? Date.parse(rec.lastLoginAt) || 0 : 0,
+          lastSeenAtMs: rec.lastSeenAt ? Date.parse(rec.lastSeenAt) || 0 : 0,
+        }));
+        if (!presenceModal.classList.contains('hidden')) {
+          renderPresenceLists();
+        }
+      }
+    })
+    .catch(() => {});
+
+  unsubscribePresence = await subscribePresence(
+    (records) => {
+      latestPresenceRecords = records;
+      if (!presenceModal.classList.contains('hidden')) {
+        renderPresenceLists();
+      }
+    },
+    async () => {
+      try {
+        const snapshot = await fetchPresenceSnapshot();
+        if (snapshot && Array.isArray(snapshot.records)) {
+          latestPresenceRecords = snapshot.records.map((rec) => ({
+            ...rec,
+            lastLoginAtMs: rec.lastLoginAt ? Date.parse(rec.lastLoginAt) || 0 : 0,
+            lastSeenAtMs: rec.lastSeenAt ? Date.parse(rec.lastSeenAt) || 0 : 0,
+          }));
+          if (!presenceModal.classList.contains('hidden')) {
+            renderPresenceLists();
+          }
+        }
+      } catch {
+        // Keep current list on transient polling error
+      }
+    }
+  );
+
+  presenceRefreshTimer = setInterval(() => {
+    if (!presenceModal.classList.contains('hidden')) {
+      renderPresenceLists();
+    }
+  }, 5000);
+}
+
+function closePresenceModal() {
+  if (presenceModal.classList.contains('hidden')) return;
+  playClickSound(profile.volume);
+  stopPresenceModalSync();
+  presenceModal.classList.add('hidden');
+}
+
+function scheduleJstMidnightRollover() {
+  if (presenceMidnightTimer) {
+    clearTimeout(presenceMidnightTimer);
+  }
+  const waitMs = Math.max(1000, getMsUntilNextJstMidnight() + 500);
+  presenceMidnightTimer = setTimeout(() => {
+    if (document.visibilityState !== 'hidden') {
+      triggerPresenceHeartbeat().catch(() => {});
+    }
+    if (!presenceModal.classList.contains('hidden')) {
+      renderPresenceLists();
+    }
+    scheduleJstMidnightRollover();
+  }, waitMs);
+}
+
+function startPresenceLifecycle() {
+  triggerPresenceHeartbeat().catch(() => {});
+  if (presenceHeartbeatTimer) {
+    clearInterval(presenceHeartbeatTimer);
+  }
+  presenceHeartbeatTimer = setInterval(() => {
+    if (document.visibilityState !== 'hidden') {
+      triggerPresenceHeartbeat().catch(() => {});
+    }
+  }, PRESENCE_HEARTBEAT_INTERVAL_MS);
+  scheduleJstMidnightRollover();
+}
+
+openPresenceBtn.addEventListener('click', openPresenceModal);
+presenceXBtn.addEventListener('click', closePresenceModal);
+presenceCloseBtn.addEventListener('click', closePresenceModal);
+presenceModal.addEventListener('click', (e) => {
+  if (e.target === presenceModal) closePresenceModal();
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    triggerPresenceHeartbeat().catch(() => {});
+  }
+});
+
+window.addEventListener('pagehide', () => {
+  sendPresenceLeave();
 });
 
 // Initialize
 buildEditorDOM();
 renderHud();
 ensureFirebase().catch(() => {});
-fetchAdminStatus().then((authed) => {
-  isAdminAuthenticated = authed;
-  renderHud();
-});
+fetchAdminStatus()
+  .then((authed) => {
+    isAdminAuthenticated = authed;
+    renderHud();
+  })
+  .finally(() => {
+    startPresenceLifecycle();
+  });
