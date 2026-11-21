@@ -997,16 +997,14 @@
         </div>
 
         <div id="next-ball-guide-body" class="enemy-guide-body">
-          <section id="next-ball-summary-card" class="guide-card guide-card-accent" aria-label="現在の次のレアリティ状況"></section>
+          <div id="next-ball-target-banner" class="next-ball-target-banner"></div>
 
-          <section class="guide-card" aria-label="レアリティ別の出現確率と確定勝利数">
-            <h3 class="guide-card-title">レアリティ別 出現確率 &amp; 確定勝利数</h3>
-            <p class="guide-card-text">
-              手持ちのレアリティを<strong>6個以上</strong>集めると、次のレアリティの敵が確率で出現するようになります。
-              さらに<strong>レア以上</strong>が次の目標になると、勝利数による<strong>確定出現カウント</strong>（レアは10勝、以降は5倍ずつ増加）も進みます！
-            </p>
-            <ul id="next-ball-tier-list" class="next-ball-tier-list"></ul>
-          </section>
+          <div class="next-ball-big-grid">
+            <section id="next-ball-prob-card" class="next-ball-big-card next-ball-big-card-prob" aria-label="次のレアリティが出現する確率"></section>
+            <section id="next-ball-wins-card" class="next-ball-big-card next-ball-big-card-wins" aria-label="あと何勝で確定出現するか"></section>
+          </div>
+
+          <p id="next-ball-rule-note" class="next-ball-rule-note"></p>
         </div>
 
         <div class="modal-footer modal-footer-center">
@@ -1038,11 +1036,8 @@
         </div>
 
         <div class="modal-footer modal-footer-center battle-resume-footer">
-          <button id="battle-resume-continue-btn" type="button" class="arcade-btn btn-green">
+          <button id="battle-resume-continue-btn" type="button" class="arcade-btn btn-green btn-close-notice">
             続ける
-          </button>
-          <button id="battle-resume-discard-btn" type="button" class="arcade-btn btn-white">
-            やめてホームへ
           </button>
         </div>
       </div>

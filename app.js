@@ -41,6 +41,7 @@ import {
   applyHealToUnit,
   computeBandageAllyHeal,
   computeBandageSelfHeal,
+  doesFrontAbilitySkipAttack,
   formatStat,
   resolveEnemyTargetRarity,
   resolveParryOnDefender,
@@ -652,13 +653,14 @@ const presenceTodayList = document.getElementById('presence-today-list');
 const nextBallGuideModal = document.getElementById('next-ball-guide-modal');
 const nextBallGuideXBtn = document.getElementById('next-ball-guide-x-btn');
 const nextBallGuideCloseBtn = document.getElementById('next-ball-guide-close-btn');
-const nextBallSummaryCard = document.getElementById('next-ball-summary-card');
-const nextBallTierList = document.getElementById('next-ball-tier-list');
+const nextBallTargetBanner = document.getElementById('next-ball-target-banner');
+const nextBallProbCard = document.getElementById('next-ball-prob-card');
+const nextBallWinsCard = document.getElementById('next-ball-wins-card');
+const nextBallRuleNote = document.getElementById('next-ball-rule-note');
 
 const battleResumeModal = document.getElementById('battle-resume-modal');
 const battleResumeSummary = document.getElementById('battle-resume-summary');
 const battleResumeContinueBtn = document.getElementById('battle-resume-continue-btn');
-const battleResumeDiscardBtn = document.getElementById('battle-resume-discard-btn');
 
 const pixelCells = [];
 const swatchButtons = [];
@@ -1511,7 +1513,7 @@ async function executeUnitTurn(attacker, ownTeam, defenderTeam, isPlayerAttacker
     playHealSound(profile.volume);
     showUnitImpactAndPopup(attacker.uid, '固まる! (半減)', 'battle-float-shield', false);
     await battleDelay(320);
-    return;
+    if (doesFrontAbilitySkipAttack(attacker.ballId, attacker.turnCounter)) return;
   }
 
   // Laser Ball: every 3rd turn charges laser without attacking (next attack deals 2.5x)
@@ -1521,10 +1523,10 @@ async function executeUnitTurn(attacker, ownTeam, defenderTeam, isPlayerAttacker
     playOpenSound(profile.volume);
     showUnitImpactAndPopup(attacker.uid, 'レーザーチャージ!', 'battle-float-laser', false);
     await battleDelay(320);
-    return;
+    if (doesFrontAbilitySkipAttack(attacker.ballId, attacker.turnCounter)) return;
   }
 
-  // Bandage Ball: every 4th turn heals self by 18% of max HP (max 8, rounded to 0.01)
+  // Bandage Ball: every 4th turn heals self by 18% of max HP (max 8, rounded to 0.01) AND still attacks!
   if (attacker.ballId === 'bandage_ball' && attacker.turnCounter % 4 === 0) {
     const selfHeal = computeBandageSelfHeal(attacker.maxHp);
     const actualSelfHeal = applyHealToUnit(attacker, selfHeal);
@@ -1536,7 +1538,7 @@ async function executeUnitTurn(attacker, ownTeam, defenderTeam, isPlayerAttacker
       'battle-float-heal',
       false
     );
-    await battleDelay(260);
+    await battleDelay(340);
     if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
   }
 
@@ -2411,98 +2413,88 @@ function renderNextBallGuideModal() {
     BALL_CATALOG
   );
 
-  nextBallSummaryCard.innerHTML = '';
-  const head = document.createElement('div');
-  head.className = 'next-ball-target-head';
-
+  // Target banner
+  nextBallTargetBanner.innerHTML = '';
   const titleEl = document.createElement('h3');
-  titleEl.className = 'guide-card-title';
-  titleEl.style.margin = '0';
+  titleEl.className = 'next-ball-target-title';
   titleEl.textContent = summary.nextLabel
-    ? `現在の目標：${summary.nextLabel}`
-    : '現在の目標：最高レアリティ到達';
-  head.appendChild(titleEl);
+    ? `次の目標レアリティ：${summary.nextLabel}`
+    : '最高レアリティ到達';
+  nextBallTargetBanner.appendChild(titleEl);
 
   if (summary.nextRarity && RARITY_STYLES[summary.nextRarity]) {
     const badge = document.createElement('span');
     badge.className = 'next-ball-rarity-badge';
     badge.style.backgroundColor = RARITY_STYLES[summary.nextRarity].cardBg;
     badge.textContent = RARITY_STYLES[summary.nextRarity].label;
-    head.appendChild(badge);
+    nextBallTargetBanner.appendChild(badge);
   }
-  nextBallSummaryCard.appendChild(head);
 
-  const statRows = document.createElement('div');
-  statRows.className = 'next-ball-stat-rows';
-
-  // Row 1: Next Rarity Spawn Probability
-  const probRow = document.createElement('div');
-  probRow.className = 'next-ball-stat-row';
-  const probTop = document.createElement('div');
-  probTop.className = 'next-ball-stat-top';
-  const probLabel = document.createElement('span');
-  probLabel.className = 'next-ball-stat-label';
+  // LEFT CARD: Probability of next rarity appearing (Large)
+  nextBallProbCard.innerHTML = '';
+  const probLabel = document.createElement('div');
+  probLabel.className = 'next-ball-big-label';
   probLabel.textContent = '次のレアリティが出現する確率';
-  const probVal = document.createElement('span');
-  probVal.className = 'next-ball-stat-value';
+  nextBallProbCard.appendChild(probLabel);
+
+  const probVal = document.createElement('div');
+  probVal.className = 'next-ball-big-value';
+  const probSub = document.createElement('p');
+  probSub.className = 'next-ball-big-sub';
+
   if (!summary.nextRarity) {
     probVal.textContent = '最大';
+    probSub.textContent = '全レアリティに到達しています';
   } else if (!summary.isRarityImplemented) {
-    probVal.textContent = `準備中（予定 ${summary.baseChancePercent}%）`;
+    probVal.classList.add('next-ball-big-value-compact');
+    probVal.textContent = `${summary.baseChancePercent}%`;
+    probSub.textContent = `${summary.nextLabel}は準備中（${summary.prevLabel} ${summary.prevOwnedCount}/6個）`;
   } else if (summary.isChanceUnlocked) {
     probVal.textContent = `${summary.activeChancePercent}%`;
+    probSub.textContent = `${summary.prevLabel} 6個以上 達成中（${summary.prevOwnedCount}個所持）`;
   } else {
-    probVal.textContent = `0%（${summary.prevLabel} ${summary.prevOwnedCount}/6個）`;
+    probVal.textContent = '0%';
+    probSub.textContent = `${summary.prevLabel}が6個以上で ${summary.baseChancePercent}% 解放（現在 ${summary.prevOwnedCount}/6個）`;
   }
-  probTop.appendChild(probLabel);
-  probTop.appendChild(probVal);
-  probRow.appendChild(probTop);
+  nextBallProbCard.appendChild(probVal);
+  nextBallProbCard.appendChild(probSub);
 
-  const probNote = document.createElement('p');
-  probNote.className = 'next-ball-stat-note';
-  if (!summary.nextRarity) {
-    probNote.textContent = 'すべてのレアリティに到達しています！';
-  } else if (!summary.isRarityImplemented) {
-    probNote.textContent = `${summary.nextLabel}のボールは今後のアップデートで追加予定です。`;
-  } else if (summary.isChanceUnlocked) {
-    probNote.textContent = `${summary.prevLabel}のボールで対戦すると、${summary.activeChancePercent}%の確率で「${summary.nextLabel}」が敵として出現します！`;
-  } else {
-    const needMore = Math.max(0, 6 - summary.prevOwnedCount);
-    probNote.textContent = `${summary.prevLabel}をあと${needMore}個集めると（合計6個以上）、${summary.baseChancePercent}%で「${summary.nextLabel}」が出現するようになります。`;
-  }
-  probRow.appendChild(probNote);
-  statRows.appendChild(probRow);
+  // RIGHT CARD: Guaranteed win countdown (Large, starts from Rare)
+  nextBallWinsCard.innerHTML = '';
+  const winsLabel = document.createElement('div');
+  winsLabel.className = 'next-ball-big-label';
+  winsLabel.textContent = 'あと何勝で確定出現するか';
+  nextBallWinsCard.appendChild(winsLabel);
 
-  // Row 2: Guaranteed Wins Countdown (Shown from Rare onward!)
-  const winRow = document.createElement('div');
-  winRow.className = 'next-ball-stat-row';
-  const winTop = document.createElement('div');
-  winTop.className = 'next-ball-stat-top';
-  const winLabel = document.createElement('span');
-  winLabel.className = 'next-ball-stat-label';
-  winLabel.textContent = 'あと何勝で確定出現するか';
-  const winVal = document.createElement('span');
-  winVal.className = 'next-ball-stat-value';
+  const winsVal = document.createElement('div');
+  winsVal.className = 'next-ball-big-value';
+  const winsSub = document.createElement('p');
+  winsSub.className = 'next-ball-big-sub';
 
   if (summary.requiredWins === null) {
-    winVal.textContent = 'レアからカウント';
-    winTop.appendChild(winLabel);
-    winTop.appendChild(winVal);
-    winRow.appendChild(winTop);
-
-    const winNote = document.createElement('p');
-    winNote.className = 'next-ball-stat-note';
-    winNote.textContent = '確定出現までの勝利数カウントは、次のレアリティが「レア」（10勝・以降は5倍ずつ増加）から表示・カウントされます。';
-    winRow.appendChild(winNote);
+    winsVal.classList.add('next-ball-big-value-compact');
+    winsVal.textContent = 'レアから表示';
+    winsSub.textContent = 'アンコモンは確率のみで出現します（レアは10勝〜）';
+    nextBallWinsCard.appendChild(winsVal);
+    nextBallWinsCard.appendChild(winsSub);
+  } else if (!summary.isChanceUnlocked) {
+    winsVal.classList.add('next-ball-big-value-compact');
+    winsVal.textContent = `あと ${summary.requiredWins}勝`;
+    winsSub.textContent = `${summary.prevLabel}を6個以上集めるとカウント開始（現在 ${summary.prevOwnedCount}/6個）`;
+    nextBallWinsCard.appendChild(winsVal);
+    nextBallWinsCard.appendChild(winsSub);
   } else {
     if (summary.remainingWins === 0 && summary.isRarityImplemented) {
-      winVal.textContent = `あと 0勝（次の試合で確定！）`;
+      winsVal.classList.add('next-ball-big-value-compact');
+      winsVal.textContent = 'あと 0勝！';
+      winsSub.textContent = `次の試合で「${summary.nextLabel}」が確定出現（${summary.currentWins}/${summary.requiredWins}勝）`;
     } else {
-      winVal.textContent = `あと ${summary.remainingWins}勝（${summary.currentWins} / ${summary.requiredWins}勝）`;
+      winsVal.textContent = `あと ${summary.remainingWins}勝`;
+      winsSub.textContent = summary.isRarityImplemented
+        ? `現在 ${summary.currentWins} / ${summary.requiredWins}勝`
+        : `実装待ち：${summary.currentWins} / ${summary.requiredWins}勝（レアの5倍）`;
     }
-    winTop.appendChild(winLabel);
-    winTop.appendChild(winVal);
-    winRow.appendChild(winTop);
+    nextBallWinsCard.appendChild(winsVal);
 
     const track = document.createElement('div');
     track.className = 'next-ball-progress-track';
@@ -2511,56 +2503,12 @@ function renderNextBallGuideModal() {
     fill.className = `next-ball-progress-fill ${summary.remainingWins === 0 ? 'next-ball-progress-fill-ready' : ''}`;
     fill.style.width = `${pct}%`;
     track.appendChild(fill);
-    winRow.appendChild(track);
-
-    const winNote = document.createElement('p');
-    winNote.className = 'next-ball-stat-note';
-    winNote.textContent = summary.isRarityImplemented
-      ? `対戦モードで勝つたびに進み、${summary.requiredWins}勝達成すると次の試合で「${summary.nextLabel}」が確定出現します。`
-      : `「${summary.nextLabel}」はレア（10勝）の5倍である ${summary.requiredWins}勝が確定ラインです（実装待ち）。`;
-    winRow.appendChild(winNote);
+    nextBallWinsCard.appendChild(track);
+    nextBallWinsCard.appendChild(winsSub);
   }
-  statRows.appendChild(winRow);
-  nextBallSummaryCard.appendChild(statRows);
 
-  // Full Tier List
-  nextBallTierList.innerHTML = '';
-  summary.tiers.forEach((tier) => {
-    const li = document.createElement('li');
-    li.className = 'next-ball-tier-item';
-
-    const top = document.createElement('div');
-    top.className = 'next-ball-tier-item-top';
-
-    const badge = document.createElement('span');
-    badge.className = 'next-ball-rarity-badge';
-    badge.style.backgroundColor = RARITY_STYLES[tier.targetRarity]?.cardBg || '#e2e8f0';
-    badge.textContent = tier.implemented ? tier.targetLabel : `${tier.targetLabel}（準備中）`;
-    top.appendChild(badge);
-
-    const chanceText = document.createElement('span');
-    chanceText.className = 'next-ball-stat-value';
-    chanceText.textContent = `確率 ${tier.chancePercent}%`;
-    top.appendChild(chanceText);
-    li.appendChild(top);
-
-    const cond = document.createElement('div');
-    cond.className = 'next-ball-tier-meta';
-    cond.textContent = `出現条件：${tier.sourceLabel}を${tier.unlockNeed}個以上所持（現在 ${tier.sourceCount}/${tier.unlockNeed}個）`;
-    li.appendChild(cond);
-
-    const pityLine = document.createElement('div');
-    pityLine.className = 'next-ball-tier-pity';
-    if (tier.requiredWins === null) {
-      pityLine.textContent = '勝利数による確定出現：なし（確率のみで出現）';
-    } else {
-      const scaleHint = tier.targetRarity === 'rare' ? '' : '（前のレアリティの5倍）';
-      pityLine.textContent = `確定出現：${tier.requiredWins}勝で出現${scaleHint} / あと ${tier.remainingWins}勝（${tier.currentWins}/${tier.requiredWins}勝）`;
-    }
-    li.appendChild(pityLine);
-
-    nextBallTierList.appendChild(li);
-  });
+  nextBallRuleNote.textContent =
+    '同じレアリティのボールを6個以上持っていると、「低確率で出現」または「規定の勝利数（レアは10勝、以降は5倍ずつ増加）で確定出現」のどちらかで次のレアリティが出現します。';
 }
 
 function openNextBallGuideModal() {
@@ -2624,14 +2572,6 @@ battleResumeContinueBtn.addEventListener('click', () => {
   }
   playOpenSound(profile.volume);
   resumeSavedBattle(pendingResumeBattle);
-});
-
-battleResumeDiscardBtn.addEventListener('click', () => {
-  playClickSound(profile.volume);
-  pendingResumeBattle = null;
-  clearActiveBattleSnapshot();
-  battleResumeModal.classList.add('hidden');
-  setScreen('home');
 });
 
 // Admin Crown Modal (👑)

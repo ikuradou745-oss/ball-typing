@@ -10,11 +10,20 @@ import {
   applyHealToUnit,
   computeBandageAllyHeal,
   computeBandageSelfHeal,
+  doesFrontAbilitySkipAttack,
   getRarityUpgradeChance,
   resolveEnemyTargetRarity,
   resolveParryOnDefender,
   roundStat,
 } from '../lib/ballCombatHelpers.js';
+
+test('bandage_ball does NOT skip front attack on turn 4 heal turn (while stone/laser charge on turn 3)', () => {
+  assert.equal(doesFrontAbilitySkipAttack('bandage_ball', 4), false);
+  assert.equal(doesFrontAbilitySkipAttack('bandage_ball', 6), false);
+  assert.equal(doesFrontAbilitySkipAttack('stone_ball', 3), true);
+  assert.equal(doesFrontAbilitySkipAttack('laser_ball', 3), true);
+  assert.equal(doesFrontAbilitySkipAttack('laser_ball', 4), false);
+});
 
 test('wood_ball is registered as uncommon with HP 9, ATK 1.1, and wall summon ability', () => {
   const wood = BALL_CATALOG.wood_ball;

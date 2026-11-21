@@ -3065,25 +3065,31 @@ body {
 
 /* Next Ball Guide Modal (📕) */
 #next-ball-guide-modal .enemy-guide-dialog {
-  max-width: 620px;
+  max-width: 600px;
 }
 
 #next-ball-guide-body {
-  gap: 10px;
-  padding: 14px 18px;
+  gap: 14px;
+  padding: 18px 20px;
 }
 
-#next-ball-guide-body .guide-card {
-  padding: 12px 14px;
-}
-
-.next-ball-target-head {
+.next-ball-target-banner {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 8px;
+  padding: 10px 14px;
+  border: 3px solid #000000;
+  border-radius: 12px;
+  background-color: #f1f5f9;
+}
+
+.next-ball-target-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 900;
+  color: #0f172a;
 }
 
 .next-ball-rarity-badge {
@@ -3096,50 +3102,61 @@ body {
   color: #0f172a;
 }
 
-.next-ball-stat-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.next-ball-big-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
 }
 
-.next-ball-stat-row {
+.next-ball-big-card {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 8px 12px;
-  border: 2.5px solid #000000;
-  border-radius: 10px;
-  background-color: #ffffff;
-}
-
-.next-ball-stat-top {
-  display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 6px;
+  justify-content: center;
+  gap: 8px;
+  min-height: 176px;
+  padding: 18px 14px;
+  border: 3px solid #000000;
+  border-radius: 14px;
+  background-color: #ffffff;
+  box-shadow: 0 4px 0 #000000;
+  text-align: center;
 }
 
-.next-ball-stat-label {
-  font-size: 13px;
+.next-ball-big-card-prob {
+  background-color: #ecfdf5;
+}
+
+.next-ball-big-card-wins {
+  background-color: #eff6ff;
+}
+
+.next-ball-big-label {
+  font-size: 14px;
   font-weight: 900;
-  color: #334155;
+  line-height: 1.35;
+  color: #1e293b;
 }
 
-.next-ball-stat-value {
+.next-ball-big-value {
   font-family: var(--font-mono);
-  font-size: 15px;
+  font-size: 38px;
   font-weight: 900;
+  line-height: 1.1;
   font-variant-numeric: tabular-nums;
   color: #0f172a;
 }
 
-.next-ball-stat-note {
+.next-ball-big-value-compact {
+  font-size: 26px;
+}
+
+.next-ball-big-sub {
   margin: 0;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 12.5px;
+  font-weight: 800;
   line-height: 1.45;
-  color: #475569;
+  color: #334155;
 }
 
 .next-ball-progress-track {
@@ -3161,44 +3178,16 @@ body {
   background-color: #22c55e;
 }
 
-.next-ball-tier-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 8px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.next-ball-tier-item {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 8px 12px;
+.next-ball-rule-note {
+  margin: 0;
+  padding: 10px 12px;
   border: 2.5px solid #000000;
   border-radius: 10px;
-  background-color: #ffffff;
-}
-
-.next-ball-tier-item-top {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-}
-
-.next-ball-tier-meta {
+  background-color: #fffbeb;
   font-size: 12.5px;
-  font-weight: 700;
-  line-height: 1.45;
+  font-weight: 800;
+  line-height: 1.5;
   color: #1e293b;
-}
-
-.next-ball-tier-pity {
-  font-size: 12.5px;
-  font-weight: 900;
-  color: #0369a1;
 }
 
 /* Mid-Battle Resume Prompt Modal */
@@ -3308,6 +3297,14 @@ body {
   .hud-gear-badge {
     width: 30px;
     height: 30px;
+  }
+
+  .next-ball-big-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .next-ball-big-card {
+    min-height: 136px;
   }
 }
 

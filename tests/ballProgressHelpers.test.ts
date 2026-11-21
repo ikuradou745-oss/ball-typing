@@ -65,7 +65,17 @@ test('getNextBallGuideSummary shows probability only for common->uncommon and un
   assert.equal(aimingLegend.remainingWins, 38);
 });
 
-test('advancePityOnBattleWin increments rare pity up to 10, triggers guarantee, and resets when rare appears', () => {
+test('advancePityOnBattleWin requires 6+ balls of same rarity, increments up to 10, and resets when rare appears', () => {
+  const notSixUncommon = {
+    ownedBalls: ['sponge_ball', 'wood_ball'],
+    ballCounts: { sponge_ball: 6, wood_ball: 3 },
+    pityWins: { rare: 0 },
+  };
+  assert.equal(
+    advancePityOnBattleWin(notSixUncommon, [{ rarity: 'uncommon', isWall: false }], BALL_CATALOG).rare,
+    0
+  );
+
   let profile = {
     ownedBalls: ['sponge_ball', 'wood_ball'],
     ballCounts: { sponge_ball: 6, wood_ball: 6 },

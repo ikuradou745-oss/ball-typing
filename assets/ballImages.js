@@ -357,7 +357,7 @@ export const BALL_CATALOG = {
     piercing: false,
     isPhysical: true,
     abilityTitle: '特殊能力',
-    ability: '4ターンに1度、自分のHPを最大HPの18%回復できる（最大8まで）。また、先頭にいない場合、6ターンに1度、味方のHPを15%回復できる。',
+    ability: '4ターンに1度、自分のHPを最大HPの18%回復できる（最大8まで）。また、先頭にいない場合、6ターンに1度、味方のHPを15%回復できる。（回復ターンでも先頭は攻撃できる）',
     svg: createBandageBallSvg(),
   },
 };
