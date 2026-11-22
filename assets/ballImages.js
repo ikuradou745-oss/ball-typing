@@ -225,6 +225,36 @@ function createTreeBallSvg() {
   `.trim();
 }
 
+export const SEED_UNIT_SVG = `
+  <svg viewBox="0 0 64 64" class="ball-vector-svg" aria-hidden="true">
+    <!-- Soil mound -->
+    <ellipse cx="32" cy="53" rx="22" ry="6.5" fill="#92400E" stroke="#000000" stroke-width="3" />
+    <!-- Tiny green tip peeking out -->
+    <path d="M32 23 C28 15 35 12 37 18 C37 21 34 23 32 23 Z" fill="#4ADE80" stroke="#000000" stroke-width="2.4" stroke-linejoin="round" />
+    <!-- Plump planted seed -->
+    <path d="M32 22 C43 24 47 36 43 46 C39 52 25 52 21 46 C17 36 21 24 32 22 Z" fill="#D97706" stroke="#000000" stroke-width="3.4" stroke-linejoin="round" />
+    <path d="M32 24 C38 26 41 35 38 44 C36 47 31 48 28 47" fill="none" stroke="#92400E" stroke-width="2.2" stroke-linecap="round" opacity="0.6" />
+    <ellipse cx="26.5" cy="31" rx="3.2" ry="5" transform="rotate(-16 26.5 31)" fill="#FDE68A" opacity="0.78" />
+  </svg>
+`.trim();
+
+export const SPROUT_UNIT_SVG = `
+  <svg viewBox="0 0 64 64" class="ball-vector-svg" aria-hidden="true">
+    <!-- Soil mound -->
+    <ellipse cx="32" cy="54" rx="22" ry="6.5" fill="#92400E" stroke="#000000" stroke-width="3" />
+    <!-- Stem -->
+    <path d="M32 52 Q32 38 32 29" fill="none" stroke="#15803D" stroke-width="5" stroke-linecap="round" />
+    <!-- Left & Right cotyledon leaves (子葉) -->
+    <path d="M32 32 C22 20 8 22 10 31 C13 38 25 38 32 32 Z" fill="#4ADE80" stroke="#000000" stroke-width="3" stroke-linejoin="round" />
+    <path d="M32 32 C42 19 56 22 54 31 C51 38 39 38 32 32 Z" fill="#22C55E" stroke="#000000" stroke-width="3" stroke-linejoin="round" />
+    <!-- Leaf veins & dew shine -->
+    <path d="M16 30 Q24 30 30 32" fill="none" stroke="#166534" stroke-width="2" stroke-linecap="round" opacity="0.65" />
+    <path d="M48 30 Q40 30 34 32" fill="none" stroke="#14532D" stroke-width="2" stroke-linecap="round" opacity="0.65" />
+    <ellipse cx="19" cy="26.5" rx="3.4" ry="1.8" transform="rotate(-15 19 26.5)" fill="#FFFFFF" opacity="0.8" />
+    <ellipse cx="44" cy="26" rx="3.4" ry="1.8" transform="rotate(15 44 26)" fill="#FFFFFF" opacity="0.7" />
+  </svg>
+`.trim();
+
 export const FLOWER_UNIT_SVG = `
   <svg viewBox="0 0 64 64" class="ball-vector-svg" aria-hidden="true">
     <!-- Stem and leaves -->
@@ -242,6 +272,24 @@ export const FLOWER_UNIT_SVG = `
     <circle cx="29" cy="24" r="2.2" fill="#FFFFFF" opacity="0.85" />
   </svg>
 `.trim();
+
+function createSpearBallSvg() {
+  return `
+    <svg viewBox="0 0 64 64" class="ball-vector-svg" aria-hidden="true">
+      <circle cx="32" cy="34" r="24" fill="#38BDF8" stroke="#000000" stroke-width="4" />
+      <path d="M11 40 A21 21 0 0 0 53 40 A23 19 0 0 1 11 40 Z" fill="#0369A1" opacity="0.58" />
+      <circle cx="27" cy="28" r="15" fill="#BAE6FD" opacity="0.45" />
+      <!-- Gleaming lance/spear piercing diagonally -->
+      <g transform="rotate(-38 33 30)">
+        <rect x="31" y="20" width="4.5" height="34" rx="2" fill="#92400E" stroke="#000000" stroke-width="2.2" />
+        <rect x="27" y="18" width="12.5" height="4.5" rx="2" fill="#F6C116" stroke="#000000" stroke-width="2.2" />
+        <polygon points="33.25,2 40,18 26.5,18" fill="#F8FAFC" stroke="#000000" stroke-width="2.8" stroke-linejoin="round" />
+        <line x1="33.25" y1="6" x2="33.25" y2="16.5" stroke="#38BDF8" stroke-width="2" stroke-linecap="round" />
+      </g>
+      <ellipse cx="20" cy="19" rx="5.6" ry="2.8" transform="rotate(-24 20 19)" fill="#FFFFFF" opacity="0.84" />
+    </svg>
+  `.trim();
+}
 
 function createRivalBallSvg() {
   return `
@@ -410,6 +458,20 @@ export const BALL_CATALOG = {
     abilityTitle: '特殊能力',
     ability: '最初のターンで種を植え、次のターンで子葉になり、3ターン目で大きくなって立派な花になる。花になるとキャラが1体増え、HP10・攻撃力1・能力なしの「花」ができる。（花ができる前に倒されると植えたものも消える）',
     svg: createTreeBallSvg(),
+  },
+  spear_ball: {
+    id: 'spear_ball',
+    name: '槍ボール',
+    rarity: 'rare',
+    level: 1,
+    hp: 15,
+    atk: 1.2,
+    attributes: [],
+    piercing: false,
+    isPhysical: true,
+    abilityTitle: '特殊能力',
+    ability: '死亡時、奥まで刺し、相手の先頭と先頭の1つ後ろのボールに攻撃力×1.5のダメージを与える。',
+    svg: createSpearBallSvg(),
   },
 };
 

@@ -2,6 +2,8 @@ import {
   BALL_CATALOG,
   FLOWER_UNIT_SVG,
   RARITY_STYLES,
+  SEED_UNIT_SVG,
+  SPROUT_UNIT_SVG,
   WOOD_WALL_SVG,
   getCatalogBallsByRarity,
   getNextRarity,
@@ -44,6 +46,7 @@ import {
   clearTreeGrowthOnDefeat,
   computeBandageAllyHeal,
   computeBandageSelfHeal,
+  computeSpearDeathStrike,
   doesFrontAbilitySkipAttack,
   formatStat,
   resolveEnemyTargetRarity,
@@ -664,6 +667,7 @@ const nextBallRuleNote = document.getElementById('next-ball-rule-note');
 const battleResumeModal = document.getElementById('battle-resume-modal');
 const battleResumeSummary = document.getElementById('battle-resume-summary');
 const battleResumeContinueBtn = document.getElementById('battle-resume-continue-btn');
+const battleResumeHomeBtn = document.getElementById('battle-resume-home-btn');
 
 const pixelCells = [];
 const swatchButtons = [];
@@ -673,6 +677,9 @@ function renderHud() {
   hudVerifiedBadge.classList.toggle('hidden', !isAdminAuthenticated);
   previewVerifiedBadge.classList.toggle('hidden', !isAdminAuthenticated);
   openAdminCrownBtn.classList.toggle('hud-crown-btn-verified', isAdminAuthenticated);
+  if (battleResumeHomeBtn) {
+    battleResumeHomeBtn.classList.toggle('hidden', !isAdminAuthenticated);
+  }
   renderAvatarCanvas(hudAvatarCanvas, profile.pixels);
   hudAvatarCanvas.setAttribute('aria-label', `${profile.username}のアイコン`);
 }
@@ -964,6 +971,7 @@ function createUnitInstance(ball, uid) {
     revived: false,
     exploded: false,
     summonedWall: false,
+    spearTriggered: false,
     isWall: false,
     isFlower: false,
     growthStage: 'none',
@@ -999,6 +1007,7 @@ function createWoodWallUnit(summonerUnit) {
     revived: false,
     exploded: false,
     summonedWall: true,
+    spearTriggered: false,
     isWall: true,
     isFlower: false,
     growthStage: 'none',
@@ -1033,6 +1042,7 @@ function createFlowerUnit(summonerUnit) {
     revived: false,
     exploded: false,
     summonedWall: false,
+    spearTriggered: false,
     isWall: false,
     isFlower: true,
     growthStage: 'none',
@@ -1223,6 +1233,37 @@ function createBattleUnitElement(unit, isEnemy, isFrontTank, isFrontAttacker) {
   return wrapper;
 }
 
+function createTreePlantStageElement(treeUnit, isEnemy) {
+  const isSeed = treeUnit.growthStage === 'seed';
+  const stageLabel = isSeed ? '種' : '子葉';
+  const stageSvg = isSeed ? SEED_UNIT_SVG : SPROUT_UNIT_SVG;
+  const progressPct = isSeed ? 33 : 66;
+  const subLabel = isSeed ? 'あと2ターン' : '次で開花!';
+
+  const wrapper = document.createElement('div');
+  wrapper.dataset.parentUid = treeUnit.uid;
+  wrapper.dataset.plantStage = treeUnit.growthStage;
+  wrapper.className = [
+    'battle-unit',
+    'battle-unit-plant-stage',
+    isEnemy ? 'battle-unit-enemy' : 'battle-unit-player',
+  ].join(' ');
+
+  wrapper.innerHTML = `
+    <span class="battle-unit-front-tag battle-plant-tag ${isSeed ? '' : 'battle-plant-tag-sprout'}">${stageLabel}</span>
+    <div class="battle-unit-sprite-wrap" role="img" aria-label="ツリーボールの${stageLabel}">
+      ${stageSvg}
+    </div>
+    <div class="battle-stat-plate battle-plant-plate">
+      <div class="battle-plant-progress-track" aria-hidden="true">
+        <div class="battle-plant-progress-fill" style="width: ${progressPct}%"></div>
+      </div>
+      <span class="battle-plant-stage-name">${subLabel}</span>
+    </div>
+  `;
+  return wrapper;
+}
+
 function renderBattleUnits() {
   if (!battleState) return;
   const firstLivingEnemy = battleState.enemyTeam.find((u) => !u.dead);
@@ -1235,6 +1276,14 @@ function renderBattleUnits() {
     const isFrontTank = Boolean(firstLivingEnemy && firstLivingEnemy.uid === enemy.uid);
     const isFrontAttacker = Boolean(firstAttackerEnemy && firstAttackerEnemy.uid === enemy.uid);
     enemyTerritoryEl.appendChild(createBattleUnitElement(enemy, true, isFrontTank, isFrontAttacker));
+    if (
+      !enemy.dead &&
+      enemy.ballId === 'tree_ball' &&
+      !enemy.flowerSpawned &&
+      (enemy.growthStage === 'seed' || enemy.growthStage === 'sprout')
+    ) {
+      enemyTerritoryEl.appendChild(createTreePlantStageElement(enemy, true));
+    }
   });
 
   playerTerritoryEl.innerHTML = '';
@@ -1244,6 +1293,14 @@ function renderBattleUnits() {
     playerTerritoryEl.appendChild(
       createBattleUnitElement(playerUnit, false, isFrontTank, isFrontAttacker)
     );
+    if (
+      !playerUnit.dead &&
+      playerUnit.ballId === 'tree_ball' &&
+      !playerUnit.flowerSpawned &&
+      (playerUnit.growthStage === 'seed' || playerUnit.growthStage === 'sprout')
+    ) {
+      playerTerritoryEl.appendChild(createTreePlantStageElement(playerUnit, false));
+    }
   });
 }
 
@@ -1442,9 +1499,15 @@ async function handleUnitDefeat(unit, opposingTeam, ownTeam, sessionId) {
   if (unit.isWall) return;
 
   // Tree Ball: if defeated before blooming into Flower, any planted seed/sprout vanishes
+  const prevGrowthStage = unit.growthStage;
   if (clearTreeGrowthOnDefeat(unit)) {
     renderBattleUnits();
-    showUnitImpactAndPopup(unit.uid, '種が消えた...', 'battle-float-miss', false);
+    showUnitImpactAndPopup(
+      unit.uid,
+      prevGrowthStage === 'sprout' ? '子葉が消えた...' : '種が消えた...',
+      'battle-float-miss',
+      false
+    );
   }
 
   // Sponge Ball once-per-battle revive at half max HP
@@ -1472,6 +1535,51 @@ async function handleUnitDefeat(unit, opposingTeam, ownTeam, sessionId) {
     playHealSound(profile.volume);
     showUnitImpactAndPopup(wallUnit.uid, `壁召喚! HP ${formatStat(wallUnit.hp)}`, 'battle-float-shield', false);
     return;
+  }
+
+  // Spear Ball on-death pierce: hits opposing front and 1 behind front for ATK * 1.5
+  if (unit.ballId === 'spear_ball' && !unit.spearTriggered) {
+    const strikes = computeSpearDeathStrike(unit, opposingTeam);
+    if (strikes.length > 0) {
+      await battleDelay(200);
+      if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
+
+      let anyKilled = false;
+      const defeatedTargets = [];
+      for (const strike of strikes) {
+        const target = strike.target;
+        target.hp = Math.max(0, roundStat(target.hp - strike.damage));
+        if (target.hp <= 0) {
+          target.hp = 0;
+          target.dead = true;
+          anyKilled = true;
+          defeatedTargets.push(target);
+        }
+      }
+
+      if (anyKilled) {
+        playKnockoutSound(profile.volume);
+      } else {
+        playAttackHitSound(profile.volume, true);
+      }
+      renderBattleUnits();
+      showUnitImpactAndPopup(unit.uid, '奥まで貫く!', 'battle-float-spear', false);
+      for (const strike of strikes) {
+        const halvedSuffix = strike.wasHalved ? ' (半減)' : '';
+        showUnitImpactAndPopup(
+          strike.target.uid,
+          `-${formatStat(strike.damage)} (槍!)${halvedSuffix}`,
+          'battle-float-spear',
+          true
+        );
+      }
+
+      for (const deadTarget of defeatedTargets) {
+        if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
+        await handleUnitDefeat(deadTarget, ownTeam, opposingTeam, sessionId);
+      }
+      return;
+    }
   }
 
   // Plastic Ball death explosion (3x ATK damage to opposing front ball; non-physical so cannot be parried)
@@ -2649,6 +2757,9 @@ function openBattleResumeModal(restored) {
     battleResumeSummary.appendChild(box);
   });
 
+  if (battleResumeHomeBtn) {
+    battleResumeHomeBtn.classList.toggle('hidden', !isAdminAuthenticated);
+  }
   battleResumeModal.classList.remove('hidden');
 }
 
@@ -2660,6 +2771,17 @@ battleResumeContinueBtn.addEventListener('click', () => {
   playOpenSound(profile.volume);
   resumeSavedBattle(pendingResumeBattle);
 });
+
+if (battleResumeHomeBtn) {
+  battleResumeHomeBtn.addEventListener('click', () => {
+    if (!isAdminAuthenticated) return;
+    playClickSound(profile.volume);
+    pendingResumeBattle = null;
+    clearActiveBattleSnapshot();
+    battleResumeModal.classList.add('hidden');
+    setScreen('home');
+  });
+}
 
 // Admin Crown Modal (👑)
 function setCrownCodeError(msg) {

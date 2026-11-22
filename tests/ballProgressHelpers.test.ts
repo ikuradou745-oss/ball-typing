@@ -192,6 +192,20 @@ test('serializeBattleState and deserializeBattleState round-trip mid-battle unit
         svg: '<svg>flower</svg>',
         dead: false,
       },
+      {
+        uid: 'e_2',
+        ballId: 'spear_ball',
+        name: '槍ボール',
+        rarity: 'rare',
+        level: 1,
+        maxHp: 15,
+        hp: 0,
+        atk: 1.2,
+        spearTriggered: true,
+        isWall: false,
+        svg: '<svg>spear</svg>',
+        dead: true,
+      },
     ],
     currentWord: { kana: 'たいぴんぐ', romaji: 'taipingu' },
     typedIndex: 3,
@@ -241,6 +255,8 @@ test('serializeBattleState and deserializeBattleState round-trip mid-battle unit
   assert.equal(restored.battleState.enemyTeam[2].maxHp, 10);
   assert.equal(restored.battleState.enemyTeam[2].atk, 1);
   assert.equal(restored.battleState.enemyTeam[2].svg, FLOWER_UNIT_SVG);
+  assert.equal(restored.battleState.enemyTeam[3].ballId, 'spear_ball');
+  assert.equal(restored.battleState.enemyTeam[3].spearTriggered, true);
 });
 
 test('serializeBattleState / deserializeBattleState reject finished or defeated battles', () => {

@@ -4,6 +4,8 @@ import {
   BALL_CATALOG,
   FLOWER_UNIT_SVG,
   RARITY_STYLES,
+  SEED_UNIT_SVG,
+  SPROUT_UNIT_SVG,
   WOOD_WALL_SVG,
   getCatalogBallsByRarity,
 } from '../assets/ballImages.js';
@@ -13,6 +15,7 @@ import {
   clearTreeGrowthOnDefeat,
   computeBandageAllyHeal,
   computeBandageSelfHeal,
+  computeSpearDeathStrike,
   doesFrontAbilitySkipAttack,
   getRarityUpgradeChance,
   resolveEnemyTargetRarity,
@@ -72,10 +75,25 @@ test('rare rarity style is light blue and laser_ball, sword_ball, bandage_ball a
   assert.equal(tree.rarity, 'rare');
   assert.equal(tree.hp, 14);
   assert.equal(tree.atk, 0.9);
+  assert.ok(SEED_UNIT_SVG.includes('<svg'));
+  assert.ok(SPROUT_UNIT_SVG.includes('<svg'));
   assert.ok(FLOWER_UNIT_SVG.includes('<svg'));
 
+  const spear = BALL_CATALOG.spear_ball;
+  assert.equal(spear.name, '槍ボール');
+  assert.equal(spear.rarity, 'rare');
+  assert.equal(spear.hp, 15);
+  assert.equal(spear.atk, 1.2);
+  assert.ok(spear.svg.includes('<svg'));
+
   const rares = getCatalogBallsByRarity('rare').map((b) => b.id);
-  assert.deepEqual(rares.sort(), ['bandage_ball', 'laser_ball', 'sword_ball', 'tree_ball']);
+  assert.deepEqual(rares.sort(), [
+    'bandage_ball',
+    'laser_ball',
+    'spear_ball',
+    'sword_ball',
+    'tree_ball',
+  ]);
 });
 
 test('rare enemy spawn probability is 2.5% when owning 6+ uncommon balls', () => {
@@ -176,4 +194,37 @@ test('tree_ball plants seed on turn 1, grows cotyledon on turn 2, blooms into fl
   assert.equal(clearTreeGrowthOnDefeat(tree), false);
   assert.equal(tree.growthStage, 'bloomed');
 });
+
+test('spear_ball on-death pierces opposing front and second unit for ATK * 1.5 once', () => {
+  const spear = { ballId: 'spear_ball', atk: 1.2, dead: true, spearTriggered: false };
+  const enemies = [
+    { uid: 'e_dead', hp: 0, dead: true, isHardened: false },
+    { uid: 'e_0', hp: 10, dead: false, isHardened: false },
+    { uid: 'e_1', hp: 10, dead: false, isHardened: true },
+    { uid: 'e_2', hp: 10, dead: false, isHardened: false },
+  ];
+
+  const strikes = computeSpearDeathStrike(spear, enemies);
+  assert.equal(strikes.length, 2);
+  assert.equal(strikes[0].target.uid, 'e_0');
+  assert.equal(strikes[0].position, 'front');
+  assert.equal(strikes[0].damage, 1.8);
+  assert.equal(strikes[1].target.uid, 'e_1');
+  assert.equal(strikes[1].position, 'second');
+  assert.equal(strikes[1].damage, 0.9); // Halved due to Stone Ball hardened state
+  assert.equal(strikes[1].wasHalved, true);
+  assert.equal(spear.spearTriggered, true);
+
+  // Triggering a second time on the same spear_ball returns empty
+  assert.deepEqual(computeSpearDeathStrike(spear, enemies), []);
+
+  // Single remaining enemy works cleanly
+  const spear2 = { ballId: 'spear_ball', atk: 1.2, dead: true, spearTriggered: false };
+  const singleEnemy = [{ uid: 'e_only', hp: 5, dead: false, isHardened: false }];
+  const singleStrikes = computeSpearDeathStrike(spear2, singleEnemy);
+  assert.equal(singleStrikes.length, 1);
+  assert.equal(singleStrikes[0].target.uid, 'e_only');
+  assert.equal(singleStrikes[0].damage, 1.8);
+});
+
 
