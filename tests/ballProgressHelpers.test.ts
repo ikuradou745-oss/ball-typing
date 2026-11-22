@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BALL_CATALOG, WOOD_WALL_SVG } from '../assets/ballImages.js';
+import { BALL_CATALOG, FLOWER_UNIT_SVG, WOOD_WALL_SVG } from '../assets/ballImages.js';
 import {
   advancePityOnBattleWin,
   deserializeBattleState,
@@ -163,6 +163,35 @@ test('serializeBattleState and deserializeBattleState round-trip mid-battle unit
         isWall: false,
         dead: false,
       },
+      {
+        uid: 'e_0',
+        ballId: 'tree_ball',
+        name: 'ツリーボール',
+        rarity: 'rare',
+        level: 1,
+        maxHp: 14,
+        hp: 11,
+        atk: 0.9,
+        growthStage: 'bloomed',
+        flowerSpawned: true,
+        svg: '<svg>tree</svg>',
+        isWall: false,
+        dead: false,
+      },
+      {
+        uid: 'e_0_flower',
+        ballId: 'flower',
+        name: '花',
+        rarity: 'rare',
+        level: 1,
+        maxHp: 10,
+        hp: 10,
+        atk: 1,
+        isWall: false,
+        isFlower: true,
+        svg: '<svg>flower</svg>',
+        dead: false,
+      },
     ],
     currentWord: { kana: 'たいぴんぐ', romaji: 'taipingu' },
     typedIndex: 3,
@@ -181,10 +210,17 @@ test('serializeBattleState and deserializeBattleState round-trip mid-battle unit
   // SVGs should not be stored in snapshot JSON
   assert.equal('svg' in snapshot.playerTeam[1], false);
 
-  const restored = deserializeBattleState(snapshot, BALL_CATALOG, WOOD_WALL_SVG, 'sponge_ball', () => ({
-    kana: 'ふぉーるばっく',
-    romaji: 'fo-rubakku',
-  }));
+  const restored = deserializeBattleState(
+    snapshot,
+    BALL_CATALOG,
+    WOOD_WALL_SVG,
+    'sponge_ball',
+    () => ({
+      kana: 'ふぉーるばっく',
+      romaji: 'fo-rubakku',
+    }),
+    FLOWER_UNIT_SVG
+  );
   assert.ok(restored);
   assert.equal(restored.battleSpeedIndex, 1);
   assert.equal(restored.battleState.turn, 'player');
@@ -198,6 +234,13 @@ test('serializeBattleState and deserializeBattleState round-trip mid-battle unit
   assert.equal(restored.battleState.playerTeam[2].laserCharged, true);
   assert.equal(restored.battleState.enemyTeam[0].parryCounter, 3);
   assert.equal(restored.battleState.enemyTeam[0].svg, BALL_CATALOG.sword_ball.svg);
+  assert.equal(restored.battleState.enemyTeam[1].growthStage, 'bloomed');
+  assert.equal(restored.battleState.enemyTeam[1].flowerSpawned, true);
+  assert.equal(restored.battleState.enemyTeam[2].isFlower, true);
+  assert.equal(restored.battleState.enemyTeam[2].name, '花');
+  assert.equal(restored.battleState.enemyTeam[2].maxHp, 10);
+  assert.equal(restored.battleState.enemyTeam[2].atk, 1);
+  assert.equal(restored.battleState.enemyTeam[2].svg, FLOWER_UNIT_SVG);
 });
 
 test('serializeBattleState / deserializeBattleState reject finished or defeated battles', () => {

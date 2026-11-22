@@ -206,6 +206,43 @@ function createBandageBallSvg() {
   `.trim();
 }
 
+function createTreeBallSvg() {
+  return `
+    <svg viewBox="0 0 64 64" class="ball-vector-svg" aria-hidden="true">
+      <circle cx="32" cy="33" r="26" fill="#22C55E" stroke="#000000" stroke-width="4" />
+      <path d="M11 40 A23 23 0 0 0 53 40 A25 21 0 0 1 11 40 Z" fill="#15803D" opacity="0.58" />
+      <!-- Leafy crown puffs -->
+      <circle cx="21" cy="22" r="9.5" fill="#4ADE80" stroke="#000000" stroke-width="2.5" />
+      <circle cx="43" cy="22" r="9.5" fill="#16A34A" stroke="#000000" stroke-width="2.5" />
+      <circle cx="32" cy="17" r="11" fill="#4ADE80" stroke="#000000" stroke-width="2.5" />
+      <!-- Tree trunk inside ball -->
+      <path d="M26 56 L28 34 L22 28 M38 56 L36 34 L42 28" fill="none" stroke="#78350F" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" />
+      <rect x="27" y="34" width="10" height="22" rx="3" fill="#92400E" stroke="#000000" stroke-width="2.5" />
+      <!-- Cute seed & leaf highlights -->
+      <circle cx="26" cy="15" r="3" fill="#BBF7D0" opacity="0.85" />
+      <ellipse cx="21" cy="14" rx="4.5" ry="2.2" transform="rotate(-22 21 14)" fill="#FFFFFF" opacity="0.78" />
+    </svg>
+  `.trim();
+}
+
+export const FLOWER_UNIT_SVG = `
+  <svg viewBox="0 0 64 64" class="ball-vector-svg" aria-hidden="true">
+    <!-- Stem and leaves -->
+    <path d="M32 36 V57" stroke="#15803D" stroke-width="5" stroke-linecap="round" />
+    <path d="M32 49 C23 44 17 47 18 52 C23 55 29 53 32 49 Z" fill="#4ADE80" stroke="#000000" stroke-width="2.5" stroke-linejoin="round" />
+    <path d="M32 47 C41 42 47 45 46 50 C41 53 35 51 32 47 Z" fill="#22C55E" stroke="#000000" stroke-width="2.5" stroke-linejoin="round" />
+    <!-- Flower petals -->
+    <circle cx="32" cy="16" r="9.5" fill="#F472B6" stroke="#000000" stroke-width="3" />
+    <circle cx="44" cy="24" r="9.5" fill="#FB7185" stroke="#000000" stroke-width="3" />
+    <circle cx="40" cy="36" r="9.5" fill="#F472B6" stroke="#000000" stroke-width="3" />
+    <circle cx="24" cy="36" r="9.5" fill="#FB7185" stroke="#000000" stroke-width="3" />
+    <circle cx="20" cy="24" r="9.5" fill="#F472B6" stroke="#000000" stroke-width="3" />
+    <!-- Center bud -->
+    <circle cx="32" cy="27" r="9.5" fill="#FACC15" stroke="#000000" stroke-width="3.2" />
+    <circle cx="29" cy="24" r="2.2" fill="#FFFFFF" opacity="0.85" />
+  </svg>
+`.trim();
+
 function createRivalBallSvg() {
   return `
     <svg viewBox="0 0 64 64" class="ball-vector-svg" aria-hidden="true">
@@ -359,6 +396,20 @@ export const BALL_CATALOG = {
     abilityTitle: '特殊能力',
     ability: '4ターンに1度、自分のHPを最大HPの18%回復できる（最大8まで）。また、先頭にいない場合、6ターンに1度、味方のHPを15%回復できる。（回復ターンでも先頭は攻撃できる）',
     svg: createBandageBallSvg(),
+  },
+  tree_ball: {
+    id: 'tree_ball',
+    name: 'ツリーボール',
+    rarity: 'rare',
+    level: 1,
+    hp: 14,
+    atk: 0.9,
+    attributes: [],
+    piercing: false,
+    isPhysical: true,
+    abilityTitle: '特殊能力',
+    ability: '最初のターンで種を植え、次のターンで子葉になり、3ターン目で大きくなって立派な花になる。花になるとキャラが1体増え、HP10・攻撃力1・能力なしの「花」ができる。（花ができる前に倒されると植えたものも消える）',
+    svg: createTreeBallSvg(),
   },
 };
 

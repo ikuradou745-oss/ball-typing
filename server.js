@@ -32,6 +32,7 @@ import {
   sanitizePresenceUsername,
   splitPresenceRecords,
 } from './lib/presenceHelpers.js';
+import { verifyAdminCodeDigest } from './lib/adminAuthHelpers.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -52,11 +53,6 @@ const MAX_CODE_ATTEMPTS = 10;
 const CODE_LOCKOUT_MS = 15 * 60 * 1000;
 const FIRESTORE_CACHE_TTL_MS = 15000;
 const PRESENCE_CACHE_TTL_MS = 2000;
-
-// Server-only scrypt digest (plaintext code is never stored in code or sent to client)
-const ADMIN_CODE_SALT = 'bt_survey_admin_salt_2026_v1';
-const ADMIN_CODE_HASH_HEX =
-  '360694cf83e1ba53e006adbcc6d0700c9b8b1e8ac0f9890ee3760c85fe0aad24c9628127919e84f5dc321115b7a619dc5a84c9a7dcea47824ef50acc9f320d41';
 
 // Server-gated Firestore capability keys matching firestore.rules
 const FIRESTORE_SERVER_AUTH =
@@ -291,6 +287,17 @@ async function loadAdminsMap(forceRefresh = false) {
         existsInFirestore: true,
       };
     });
+    // Merge locally verified entries not yet visible in Firestore (e.g., transient write failure)
+    for (const [vid, localEntry] of Object.entries(localAdmins)) {
+      if (!map[vid] && localEntry && localEntry.verified === true) {
+        map[vid] = {
+          verified: true,
+          username: typeof localEntry.username === 'string' ? localEntry.username : 'プレイヤー',
+          existsInFirestore: false,
+        };
+      }
+    }
+
     adminsCache = { fetchedAt: now, map };
 
     // Keep local cache synchronized with Firestore source of truth
@@ -406,21 +413,6 @@ async function isAdminRequestAsync(req) {
   return Boolean(await getValidAdminPayloadAsync(req));
 }
 
-function verifyAdminCodeDigest(inputCode) {
-  if (typeof inputCode !== 'string' || inputCode.length === 0 || inputCode.length > 64) {
-    return false;
-  }
-  const envOverride = process.env.SURVEY_ADMIN_CODE;
-  if (typeof envOverride === 'string' && envOverride.length > 0) {
-    const a = Buffer.from(inputCode, 'utf8');
-    const b = Buffer.from(envOverride, 'utf8');
-    return a.length === b.length && crypto.timingSafeEqual(a, b);
-  }
-  const derived = crypto.scryptSync(inputCode, ADMIN_CODE_SALT, 64);
-  const expected = Buffer.from(ADMIN_CODE_HASH_HEX, 'hex');
-  return derived.length === expected.length && crypto.timingSafeEqual(derived, expected);
-}
-
 function getClientIpKey(req) {
   const ip = String(req.ip || req.socket?.remoteAddress || 'unknown');
   return crypto.createHash('sha256').update(ip).digest('hex').slice(0, 16);
@@ -461,9 +453,11 @@ app.get('/api/admin/status', async (req, res) => {
 });
 
 app.post('/api/admin/verify-code', async (req, res) => {
+  const existingVisitor = getExistingVisitorFromRequest(req);
   const ipKey = getClientIpKey(req);
+  const attemptKey = `${ipKey}:${existingVisitor?.visitorId || 'anon'}`;
   const now = Date.now();
-  const attempt = failedCodeAttempts.get(ipKey);
+  const attempt = failedCodeAttempts.get(attemptKey);
   if (attempt && attempt.lockUntil > now) {
     res.status(429).json({
       ok: false,
@@ -472,10 +466,10 @@ app.post('/api/admin/verify-code', async (req, res) => {
     return;
   }
 
-  const code = typeof req.body?.code === 'string' ? req.body.code.trim() : '';
-  if (!verifyAdminCodeDigest(code)) {
+  const rawCode = typeof req.body?.code === 'string' ? req.body.code : '';
+  if (!verifyAdminCodeDigest(rawCode)) {
     const nextCount = attempt && attempt.lockUntil <= now ? attempt.count + 1 : 1;
-    failedCodeAttempts.set(ipKey, {
+    failedCodeAttempts.set(attemptKey, {
       count: nextCount,
       lockUntil: nextCount >= MAX_CODE_ATTEMPTS ? now + CODE_LOCKOUT_MS : 0,
     });
@@ -483,7 +477,7 @@ app.post('/api/admin/verify-code', async (req, res) => {
     return;
   }
 
-  failedCodeAttempts.delete(ipKey);
+  failedCodeAttempts.delete(attemptKey);
   const { visitorId, visitorKey } = getOrIssueVisitor(req, res);
   const username =
     (typeof req.body?.username === 'string' ? req.body.username.trim() : '').slice(
@@ -492,6 +486,7 @@ app.post('/api/admin/verify-code', async (req, res) => {
     ) || 'プレイヤー';
 
   const existingAdmins = await loadAdminsMap(true);
+  let persistedInFirestore = Boolean(existingAdmins[visitorId]?.existsInFirestore);
   if (firestoreDb) {
     try {
       const adminRef = doc(firestoreDb, 'admins', visitorId);
@@ -511,7 +506,7 @@ app.post('/api/admin/verify-code', async (req, res) => {
           updatedAt: serverTimestamp(),
         });
       }
-      adminsCache = { fetchedAt: 0, map: null };
+      persistedInFirestore = true;
     } catch (err) {
       console.error('Failed to persist admin verification in Firestore:', err);
     }
@@ -524,6 +519,18 @@ app.post('/api/admin/verify-code', async (req, res) => {
     verifiedAt: new Date(now).toISOString(),
   };
   writeJsonAtomic(ADMINS_FILE, localAdmins);
+
+  adminsCache = {
+    fetchedAt: now,
+    map: {
+      ...(existingAdmins && typeof existingAdmins === 'object' ? existingAdmins : {}),
+      [visitorId]: {
+        verified: true,
+        username,
+        existsInFirestore: persistedInFirestore,
+      },
+    },
+  };
 
   const adminKey = signPayload({
     role: 'admin',
@@ -557,6 +564,9 @@ app.post('/api/admin/logout', async (req, res) => {
       delete localAdmins[vid];
       localChanged = true;
     }
+    if (existingAdmins[vid]) {
+      existingAdmins[vid] = { ...existingAdmins[vid], verified: false };
+    }
     if (firestoreDb && existingAdmins[vid]?.existsInFirestore) {
       try {
         await updateDoc(doc(firestoreDb, 'admins', vid), {
@@ -568,7 +578,7 @@ app.post('/api/admin/logout', async (req, res) => {
       }
     }
   }
-  adminsCache = { fetchedAt: 0, map: null };
+  adminsCache = { fetchedAt: Date.now(), map: existingAdmins };
   if (localChanged) {
     writeJsonAtomic(ADMINS_FILE, localAdmins);
   }

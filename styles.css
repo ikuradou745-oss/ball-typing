@@ -933,6 +933,21 @@ body {
   color: #166534;
 }
 
+.battle-chip-tree-seed {
+  background-color: #fef3c7;
+  color: #78350f;
+}
+
+.battle-chip-tree-sprout {
+  background-color: #bbf7d0;
+  color: #14532d;
+}
+
+.battle-chip-tree-bloom {
+  background-color: #fbcfe8;
+  color: #9d174d;
+}
+
 .battle-unit-hit {
   animation: battle-hit-shake calc(240ms / var(--battle-speed, 1)) ease-in-out;
 }
@@ -1998,6 +2013,7 @@ body {
   font-weight: 700;
   color: #020617;
   outline: none;
+  user-select: text;
 }
 
 .text-input:focus {

@@ -177,15 +177,27 @@ export function unregisterActiveTab() {
   }
 }
 
+const memoryStorageFallback = new Map();
+
 function readStorageKey(storageKey) {
   try {
-    return localStorage.getItem(storageKey) || '';
+    const val = localStorage.getItem(storageKey);
+    if (val) {
+      memoryStorageFallback.set(storageKey, val);
+      return val;
+    }
   } catch {
-    return '';
+    // Fallback to in-memory storage when localStorage is restricted
   }
+  return memoryStorageFallback.get(storageKey) || '';
 }
 
 function writeStorageKey(storageKey, value) {
+  if (value) {
+    memoryStorageFallback.set(storageKey, value);
+  } else {
+    memoryStorageFallback.delete(storageKey);
+  }
   try {
     if (value) {
       localStorage.setItem(storageKey, value);
@@ -193,7 +205,7 @@ function writeStorageKey(storageKey, value) {
       localStorage.removeItem(storageKey);
     }
   } catch {
-    // Ignore storage quota errors
+    // Ignore storage quota / iframe sandbox errors
   }
 }
 

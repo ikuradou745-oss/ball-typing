@@ -1,4 +1,40 @@
 {
+  "1af11dd6ec2e628bc53b2e1b": {
+    "visitorId": "1af11dd6ec2e628bc53b2e1b",
+    "username": "らもPC",
+    "isAdminVerified": false,
+    "dayKey": "2026-11-21",
+    "isOnline": true,
+    "lastLoginAt": "2026-11-21T10:15:50.280Z",
+    "lastLoginAtMs": 1795256150280,
+    "lastSeenAt": "2026-11-21T10:15:55.989Z",
+    "lastSeenAtMs": 1795256155989,
+    "existsInFirestore": true
+  },
+  "5041e83c076d50c11c93404c": {
+    "visitorId": "5041e83c076d50c11c93404c",
+    "username": "プレイヤー1",
+    "isAdminVerified": false,
+    "dayKey": "2026-11-21",
+    "isOnline": true,
+    "lastLoginAt": "2026-11-21T12:54:46.666Z",
+    "lastLoginAtMs": 1795265686666,
+    "lastSeenAt": "2026-11-21T12:54:53.959Z",
+    "lastSeenAtMs": 1795265693959,
+    "existsInFirestore": true
+  },
+  "56f91e98748a933f86cd9a4c": {
+    "visitorId": "56f91e98748a933f86cd9a4c",
+    "username": "らもタブレット",
+    "isAdminVerified": false,
+    "dayKey": "2026-11-21",
+    "isOnline": true,
+    "lastLoginAt": "2026-11-21T12:57:43.253Z",
+    "lastLoginAtMs": 1795265863253,
+    "lastSeenAt": "2026-11-21T13:12:13.849Z",
+    "lastSeenAtMs": 1795266733849,
+    "existsInFirestore": true
+  },
   "7d5169c99dc85f2dc22bef03": {
     "visitorId": "7d5169c99dc85f2dc22bef03",
     "username": "らもビルダー",
@@ -9,6 +45,18 @@
     "lastLoginAtMs": 1795246416622,
     "lastSeenAt": "2026-11-21T07:33:36.622Z",
     "lastSeenAtMs": 1795246416622,
+    "existsInFirestore": true
+  },
+  "ab8c1c0ccdab1b227bc5910b": {
+    "visitorId": "ab8c1c0ccdab1b227bc5910b",
+    "username": "Rioto",
+    "isAdminVerified": false,
+    "dayKey": "2026-11-21",
+    "isOnline": true,
+    "lastLoginAt": "2026-11-21T13:01:08.900Z",
+    "lastLoginAtMs": 1795266068900,
+    "lastSeenAt": "2026-11-21T13:14:38.546Z",
+    "lastSeenAtMs": 1795266878546,
     "existsInFirestore": true
   },
   "acf4a2c4422f2ddb93f5f980": {
@@ -23,16 +71,28 @@
     "lastSeenAtMs": 1795228010862,
     "existsInFirestore": true
   },
+  "c998a707cfd3844b139c0097": {
+    "visitorId": "c998a707cfd3844b139c0097",
+    "username": "ピカごり @ゆっけ",
+    "isAdminVerified": false,
+    "dayKey": "2026-11-21",
+    "isOnline": true,
+    "lastLoginAt": "2026-11-21T12:00:45.876Z",
+    "lastLoginAtMs": 1795262445876,
+    "lastSeenAt": "2026-11-21T13:23:01.256Z",
+    "lastSeenAtMs": 1795267381256,
+    "existsInFirestore": true
+  },
   "fa110b647f74f43ea30ea83e": {
     "visitorId": "fa110b647f74f43ea30ea83e",
     "username": "らもビルダー",
     "isAdminVerified": true,
-    "dayKey": "2026-11-21",
+    "dayKey": "2026-11-22",
     "isOnline": true,
-    "lastLoginAt": "2026-11-21T07:33:36.664Z",
-    "lastLoginAtMs": 1795246416664,
-    "lastSeenAt": "2026-11-21T08:10:32.226Z",
-    "lastSeenAtMs": 1795248632226,
+    "lastLoginAt": "2026-11-22T07:13:05.694Z",
+    "lastLoginAtMs": 1795331585694,
+    "lastSeenAt": "2026-11-22T07:25:06.170Z",
+    "lastSeenAtMs": 1795332306170,
     "existsInFirestore": true
   }
 }

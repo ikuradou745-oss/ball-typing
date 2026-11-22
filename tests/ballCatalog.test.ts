@@ -2,12 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   BALL_CATALOG,
+  FLOWER_UNIT_SVG,
   RARITY_STYLES,
   WOOD_WALL_SVG,
   getCatalogBallsByRarity,
 } from '../assets/ballImages.js';
 import {
+  advanceTreeBallGrowth,
   applyHealToUnit,
+  clearTreeGrowthOnDefeat,
   computeBandageAllyHeal,
   computeBandageSelfHeal,
   doesFrontAbilitySkipAttack,
@@ -64,8 +67,15 @@ test('rare rarity style is light blue and laser_ball, sword_ball, bandage_ball a
   assert.equal(bandage.hp, 16);
   assert.equal(bandage.atk, 0.9);
 
+  const tree = BALL_CATALOG.tree_ball;
+  assert.equal(tree.name, 'ツリーボール');
+  assert.equal(tree.rarity, 'rare');
+  assert.equal(tree.hp, 14);
+  assert.equal(tree.atk, 0.9);
+  assert.ok(FLOWER_UNIT_SVG.includes('<svg'));
+
   const rares = getCatalogBallsByRarity('rare').map((b) => b.id);
-  assert.deepEqual(rares.sort(), ['bandage_ball', 'laser_ball', 'sword_ball']);
+  assert.deepEqual(rares.sort(), ['bandage_ball', 'laser_ball', 'sword_ball', 'tree_ball']);
 });
 
 test('rare enemy spawn probability is 2.5% when owning 6+ uncommon balls', () => {
@@ -116,3 +126,54 @@ test('bandage_ball self heal (18%, cap 8) and bench ally heal (15%) round to 2 d
   assert.equal(healed, 1.35);
   assert.equal(ally.hp, 6.35);
 });
+
+test('tree_ball plants seed on turn 1, grows cotyledon on turn 2, blooms into flower on turn 3, and clears if defeated early', () => {
+  const tree = {
+    ballId: 'tree_ball',
+    dead: false,
+    turnCounter: 0,
+    growthStage: 'none',
+    flowerSpawned: false,
+  };
+
+  tree.turnCounter = 1;
+  const t1 = advanceTreeBallGrowth(tree);
+  assert.equal(t1.stage, 'seed');
+  assert.equal(t1.shouldSpawnFlower, false);
+  assert.equal(tree.growthStage, 'seed');
+
+  tree.turnCounter = 2;
+  const t2 = advanceTreeBallGrowth(tree);
+  assert.equal(t2.stage, 'sprout');
+  assert.equal(t2.shouldSpawnFlower, false);
+  assert.equal(tree.growthStage, 'sprout');
+
+  tree.turnCounter = 3;
+  const t3 = advanceTreeBallGrowth(tree);
+  assert.equal(t3.stage, 'bloomed');
+  assert.equal(t3.shouldSpawnFlower, true);
+  assert.equal(tree.flowerSpawned, true);
+
+  // Turn 4 should not spawn another flower
+  tree.turnCounter = 4;
+  const t4 = advanceTreeBallGrowth(tree);
+  assert.equal(t4.changed, false);
+  assert.equal(t4.shouldSpawnFlower, false);
+
+  // Dying before blooming clears the planted seed/sprout
+  const earlyDyingTree = {
+    ballId: 'tree_ball',
+    dead: true,
+    turnCounter: 2,
+    growthStage: 'sprout',
+    flowerSpawned: false,
+  };
+  assert.equal(clearTreeGrowthOnDefeat(earlyDyingTree), true);
+  assert.equal(earlyDyingTree.growthStage, 'none');
+
+  // Dying after already blooming keeps bloomed state (flower stays)
+  tree.dead = true;
+  assert.equal(clearTreeGrowthOnDefeat(tree), false);
+  assert.equal(tree.growthStage, 'bloomed');
+});
+

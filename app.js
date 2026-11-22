@@ -1,5 +1,6 @@
 import {
   BALL_CATALOG,
+  FLOWER_UNIT_SVG,
   RARITY_STYLES,
   WOOD_WALL_SVG,
   getCatalogBallsByRarity,
@@ -38,7 +39,9 @@ import {
   prepareNextTypingWord,
 } from './lib/typingComboHelpers.js';
 import {
+  advanceTreeBallGrowth,
   applyHealToUnit,
+  clearTreeGrowthOnDefeat,
   computeBandageAllyHeal,
   computeBandageSelfHeal,
   doesFrontAbilitySkipAttack,
@@ -962,6 +965,9 @@ function createUnitInstance(ball, uid) {
     exploded: false,
     summonedWall: false,
     isWall: false,
+    isFlower: false,
+    growthStage: 'none',
+    flowerSpawned: false,
     attacksMade: 0,
     turnCounter: 0,
     benchTurnCounter: 0,
@@ -994,6 +1000,43 @@ function createWoodWallUnit(summonerUnit) {
     exploded: false,
     summonedWall: true,
     isWall: true,
+    isFlower: false,
+    growthStage: 'none',
+    flowerSpawned: false,
+    attacksMade: 0,
+    turnCounter: 0,
+    benchTurnCounter: 0,
+    parryCounter: 0,
+    laserCharged: false,
+    isHardened: false,
+    atkDebuffTurns: 0,
+    atkMultiplier: 1,
+    missDebuffTurns: 0,
+    dead: false,
+  };
+}
+
+function createFlowerUnit(summonerUnit) {
+  return {
+    uid: `${summonerUnit.uid}_flower`,
+    ballId: 'flower',
+    name: '花',
+    rarity: summonerUnit.rarity,
+    level: summonerUnit.level,
+    maxHp: 10,
+    hp: 10,
+    atk: 1,
+    attributes: [],
+    piercing: false,
+    isPhysical: true,
+    svg: FLOWER_UNIT_SVG,
+    revived: false,
+    exploded: false,
+    summonedWall: false,
+    isWall: false,
+    isFlower: true,
+    growthStage: 'none',
+    flowerSpawned: false,
     attacksMade: 0,
     turnCounter: 0,
     benchTurnCounter: 0,
@@ -1041,7 +1084,8 @@ function loadActiveBattleSnapshot() {
       BALL_CATALOG,
       WOOD_WALL_SVG,
       DEFAULT_BALL_ID,
-      pickNextWord
+      pickNextWord,
+      FLOWER_UNIT_SVG
     );
     if (!restored) {
       clearActiveBattleSnapshot();
@@ -1132,6 +1176,15 @@ function createBattleUnitElement(unit, isEnemy, isFrontTank, isFrontAttacker) {
           ? '<span class="battle-unit-status-chip battle-chip-parry">パリィ待機</span>'
           : `<span class="battle-unit-status-chip battle-chip-parry">パリィ${unit.parryCounter % 4}/4</span>`
       );
+    }
+    if (unit.ballId === 'tree_ball') {
+      if (unit.growthStage === 'seed') {
+        chips.push('<span class="battle-unit-status-chip battle-chip-tree-seed">種</span>');
+      } else if (unit.growthStage === 'sprout') {
+        chips.push('<span class="battle-unit-status-chip battle-chip-tree-sprout">子葉</span>');
+      } else if (unit.growthStage === 'bloomed') {
+        chips.push('<span class="battle-unit-status-chip battle-chip-tree-bloom">開花済み</span>');
+      }
     }
     if (unit.isHardened) {
       chips.push('<span class="battle-unit-status-chip battle-chip-shield">固まる</span>');
@@ -1388,6 +1441,12 @@ async function handleUnitDefeat(unit, opposingTeam, ownTeam, sessionId) {
 
   if (unit.isWall) return;
 
+  // Tree Ball: if defeated before blooming into Flower, any planted seed/sprout vanishes
+  if (clearTreeGrowthOnDefeat(unit)) {
+    renderBattleUnits();
+    showUnitImpactAndPopup(unit.uid, '種が消えた...', 'battle-float-miss', false);
+  }
+
   // Sponge Ball once-per-battle revive at half max HP
   if (unit.ballId === 'sponge_ball' && !unit.revived) {
     await battleDelay(260);
@@ -1540,6 +1599,34 @@ async function executeUnitTurn(attacker, ownTeam, defenderTeam, isPlayerAttacker
     );
     await battleDelay(340);
     if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
+  }
+
+  // Tree Ball: Turn 1 plants seed -> Turn 2 grows to cotyledon -> Turn 3 blooms into a Flower (HP 10, ATK 1, no ability)
+  if (attacker.ballId === 'tree_ball' && !attacker.flowerSpawned) {
+    const growth = advanceTreeBallGrowth(attacker);
+    if (growth.changed) {
+      if (growth.shouldSpawnFlower) {
+        const flowerUnit = createFlowerUnit(attacker);
+        const unitIdx = ownTeam.indexOf(attacker);
+        ownTeam.splice(unitIdx >= 0 ? unitIdx + 1 : ownTeam.length, 0, flowerUnit);
+        renderBattleUnits();
+        playHealSound(profile.volume);
+        showUnitImpactAndPopup(attacker.uid, '立派な花に成長!', 'battle-float-heal', false);
+        showUnitImpactAndPopup(flowerUnit.uid, '花 +1体! (HP10/攻1)', 'battle-float-heal', false);
+        await battleDelay(340);
+      } else {
+        renderBattleUnits();
+        playOpenSound(profile.volume);
+        showUnitImpactAndPopup(
+          attacker.uid,
+          growth.stage === 'seed' ? '種を植えた!' : '子葉が出た!',
+          'battle-float-heal',
+          false
+        );
+        await battleDelay(280);
+      }
+      if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
+    }
   }
 
   const defender = defenderTeam.find((u) => !u.dead);
@@ -2590,16 +2677,22 @@ function renderCrownModalView() {
   crownVerifiedView.classList.toggle('hidden', !isAdminAuthenticated);
 }
 
+let adminStatusReqSeq = 0;
+let isVerifyingCrownCode = false;
+
 async function openAdminCrownModal() {
   playOpenSound(profile.volume);
+  const reqSeq = ++adminStatusReqSeq;
   crownCodeInput.value = '';
   setCrownCodeError('');
   renderCrownModalView();
   adminCrownModal.classList.remove('hidden');
-  isAdminAuthenticated = await fetchAdminStatus();
+  const authed = await fetchAdminStatus();
+  if (reqSeq !== adminStatusReqSeq || isVerifyingCrownCode) return;
+  isAdminAuthenticated = authed;
   renderHud();
   renderCrownModalView();
-  if (!isAdminAuthenticated) {
+  if (!isAdminAuthenticated && !adminCrownModal.classList.contains('hidden')) {
     crownCodeInput.focus();
   }
 }
@@ -2613,12 +2706,15 @@ function closeAdminCrownModal() {
 }
 
 async function handleCrownCodeSubmit() {
+  if (isVerifyingCrownCode) return;
   const code = crownCodeInput.value.trim();
   if (!code) {
     playErrorSound(profile.volume);
     setCrownCodeError('コードを入力してください。');
     return;
   }
+  isVerifyingCrownCode = true;
+  adminStatusReqSeq += 1;
   crownCodeSubmitBtn.disabled = true;
   setCrownCodeError('');
   try {
@@ -2633,6 +2729,7 @@ async function handleCrownCodeSubmit() {
     playErrorSound(profile.volume);
     setCrownCodeError(err instanceof Error ? err.message : 'コードが正しくありません。');
   } finally {
+    isVerifyingCrownCode = false;
     crownCodeSubmitBtn.disabled = false;
   }
 }
@@ -2646,6 +2743,7 @@ adminCrownModal.addEventListener('click', (e) => {
 });
 crownCodeSubmitBtn.addEventListener('click', handleCrownCodeSubmit);
 crownCodeInput.addEventListener('keydown', (e) => {
+  if (e.isComposing) return;
   if (e.key === 'Enter') {
     e.preventDefault();
     handleCrownCodeSubmit();
@@ -2653,6 +2751,7 @@ crownCodeInput.addEventListener('keydown', (e) => {
 });
 crownLogoutBtn.addEventListener('click', async () => {
   playClickSound(profile.volume);
+  adminStatusReqSeq += 1;
   stopAdminSurveySubscription();
   await logoutAdminSession();
   isAdminAuthenticated = false;
@@ -3223,13 +3322,15 @@ if (savedBattleOnLoad) {
   openBattleResumeModal(savedBattleOnLoad);
 }
 ensureFirebase().catch(() => {});
-startPresenceLifecycle();
+const initialStatusSeq = ++adminStatusReqSeq;
 fetchAdminStatus()
   .then((authed) => {
-    isAdminAuthenticated = authed;
-    renderHud();
-    if (authed) {
-      triggerPresenceHeartbeat().catch(() => {});
+    if (initialStatusSeq === adminStatusReqSeq && !isVerifyingCrownCode) {
+      isAdminAuthenticated = authed;
+      renderHud();
     }
   })
-  .catch(() => {});
+  .catch(() => {})
+  .finally(() => {
+    startPresenceLifecycle();
+  });
