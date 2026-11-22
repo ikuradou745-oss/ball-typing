@@ -1,3 +1,4 @@
+import './lib/consoleGuard.js';
 import {
   BALL_CATALOG,
   FLOWER_UNIT_SVG,

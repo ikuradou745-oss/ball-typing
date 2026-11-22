@@ -3,12 +3,12 @@
     "visitorId": "1af11dd6ec2e628bc53b2e1b",
     "username": "らもPC",
     "isAdminVerified": false,
-    "dayKey": "2026-11-21",
+    "dayKey": "2026-11-22",
     "isOnline": true,
-    "lastLoginAt": "2026-11-21T10:15:50.280Z",
-    "lastLoginAtMs": 1795256150280,
-    "lastSeenAt": "2026-11-21T10:15:55.989Z",
-    "lastSeenAtMs": 1795256155989,
+    "lastLoginAt": "2026-11-22T07:36:45.759Z",
+    "lastLoginAtMs": 1795333005759,
+    "lastSeenAt": "2026-11-22T07:38:55.728Z",
+    "lastSeenAtMs": 1795333135728,
     "existsInFirestore": true
   },
   "5041e83c076d50c11c93404c": {
@@ -33,6 +33,18 @@
     "lastLoginAtMs": 1795265863253,
     "lastSeenAt": "2026-11-21T13:12:13.849Z",
     "lastSeenAtMs": 1795266733849,
+    "existsInFirestore": true
+  },
+  "7433b8dca3dcb12ca66d2def": {
+    "visitorId": "7433b8dca3dcb12ca66d2def",
+    "username": "プレイヤー1",
+    "isAdminVerified": false,
+    "dayKey": "2026-11-22",
+    "isOnline": true,
+    "lastLoginAt": "2026-11-22T07:47:04.552Z",
+    "lastLoginAtMs": 1795333624552,
+    "lastSeenAt": "2026-11-22T07:47:04.552Z",
+    "lastSeenAtMs": 1795333624552,
     "existsInFirestore": true
   },
   "7d5169c99dc85f2dc22bef03": {
@@ -83,6 +95,18 @@
     "lastSeenAtMs": 1795267381256,
     "existsInFirestore": true
   },
+  "cfa575cba0f00a29ac84dbb1": {
+    "visitorId": "cfa575cba0f00a29ac84dbb1",
+    "username": "プレイヤー1",
+    "isAdminVerified": false,
+    "dayKey": "2026-11-22",
+    "isOnline": true,
+    "lastLoginAt": "2026-11-22T07:45:55.766Z",
+    "lastLoginAtMs": 1795333555766,
+    "lastSeenAt": "2026-11-22T07:45:55.766Z",
+    "lastSeenAtMs": 1795333555766,
+    "existsInFirestore": true
+  },
   "fa110b647f74f43ea30ea83e": {
     "visitorId": "fa110b647f74f43ea30ea83e",
     "username": "らもビルダー",
@@ -91,8 +115,8 @@
     "isOnline": true,
     "lastLoginAt": "2026-11-22T07:13:05.694Z",
     "lastLoginAtMs": 1795331585694,
-    "lastSeenAt": "2026-11-22T07:34:57.486Z",
-    "lastSeenAtMs": 1795332897486,
+    "lastSeenAt": "2026-11-22T07:47:22.974Z",
+    "lastSeenAtMs": 1795333642974,
     "existsInFirestore": true
   }
 }
