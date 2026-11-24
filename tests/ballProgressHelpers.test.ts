@@ -14,7 +14,8 @@ test('getRequiredWinsForRarity starts from rare (10) and scales 5x per rarity', 
   assert.equal(getRequiredWinsForRarity('common'), null);
   assert.equal(getRequiredWinsForRarity('uncommon'), null);
   assert.equal(getRequiredWinsForRarity('rare'), 10);
-  assert.equal(getRequiredWinsForRarity('legend'), 50);
+  assert.equal(getRequiredWinsForRarity('super_rare'), 50);
+  assert.equal(getRequiredWinsForRarity('legend'), 250);
 });
 
 test('getNextBallGuideSummary shows probability only for common->uncommon and unlocks win countdown from rare', () => {
@@ -54,15 +55,27 @@ test('getNextBallGuideSummary shows probability only for common->uncommon and un
   assert.equal(aimingRare.currentWins, 4);
   assert.equal(aimingRare.remainingWins, 6);
 
-  const aimingLegend = getNextBallGuideSummary(
+  const aimingSuperRare = getNextBallGuideSummary(
     ['laser_ball'],
-    { laser_ball: 1 },
-    { rare: 2, legend: 12 },
+    { laser_ball: 6 },
+    { rare: 2, super_rare: 12 },
+    BALL_CATALOG
+  );
+  assert.equal(aimingSuperRare.nextRarity, 'super_rare');
+  assert.equal(aimingSuperRare.isChanceUnlocked, true);
+  assert.equal(aimingSuperRare.activeChancePercent, 1.25);
+  assert.equal(aimingSuperRare.requiredWins, 50);
+  assert.equal(aimingSuperRare.remainingWins, 38);
+
+  const aimingLegend = getNextBallGuideSummary(
+    ['magician_ball'],
+    { magician_ball: 1 },
+    { super_rare: 5, legend: 40 },
     BALL_CATALOG
   );
   assert.equal(aimingLegend.nextRarity, 'legend');
-  assert.equal(aimingLegend.requiredWins, 50);
-  assert.equal(aimingLegend.remainingWins, 38);
+  assert.equal(aimingLegend.requiredWins, 250);
+  assert.equal(aimingLegend.remainingWins, 210);
 });
 
 test('advancePityOnBattleWin requires 6+ balls of same rarity, increments up to 10, and resets when rare appears', () => {
@@ -134,7 +147,7 @@ test('serializeBattleState and deserializeBattleState round-trip mid-battle unit
       {
         uid: 'p_1',
         ballId: 'laser_ball',
-        name: 'レーザーボール',
+        name: 'ブルーレーザーボール',
         rarity: 'rare',
         level: 1,
         maxHp: 15,
@@ -144,6 +157,20 @@ test('serializeBattleState and deserializeBattleState round-trip mid-battle unit
         isPhysical: false,
         laserCharged: true,
         svg: '<svg>laser</svg>',
+        isWall: false,
+        dead: false,
+      },
+      {
+        uid: 'p_2',
+        ballId: 'one_shot_ball',
+        name: '一発ボール',
+        rarity: 'super_rare',
+        level: 1,
+        maxHp: 21,
+        hp: 19.5,
+        atk: 2.42,
+        oneShotPerfectCount: 2,
+        svg: '<svg>oneshot</svg>',
         isWall: false,
         dead: false,
       },
@@ -159,6 +186,9 @@ test('serializeBattleState and deserializeBattleState round-trip mid-battle unit
         hp: 8.5,
         atk: 1.7,
         parryCounter: 3,
+        burnTurns: 2,
+        iceTurns: 3,
+        stunTurns: 1,
         svg: '<svg>sword</svg>',
         isWall: false,
         dead: false,
@@ -246,7 +276,13 @@ test('serializeBattleState and deserializeBattleState round-trip mid-battle unit
   assert.equal(restored.battleState.playerTeam[1].isWall, true);
   assert.equal(restored.battleState.playerTeam[1].svg, WOOD_WALL_SVG);
   assert.equal(restored.battleState.playerTeam[2].laserCharged, true);
+  assert.equal(restored.battleState.playerTeam[2].name, 'ブルーレーザーボール');
+  assert.equal(restored.battleState.playerTeam[3].atk, 2.42);
+  assert.equal(restored.battleState.playerTeam[3].oneShotPerfectCount, 2);
   assert.equal(restored.battleState.enemyTeam[0].parryCounter, 3);
+  assert.equal(restored.battleState.enemyTeam[0].burnTurns, 2);
+  assert.equal(restored.battleState.enemyTeam[0].iceTurns, 3);
+  assert.equal(restored.battleState.enemyTeam[0].stunTurns, 1);
   assert.equal(restored.battleState.enemyTeam[0].svg, BALL_CATALOG.sword_ball.svg);
   assert.equal(restored.battleState.enemyTeam[1].growthStage, 'bloomed');
   assert.equal(restored.battleState.enemyTeam[1].flowerSpawned, true);

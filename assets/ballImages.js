@@ -1,4 +1,4 @@
-export const RARITY_ORDER = ['common', 'uncommon', 'rare', 'legend'];
+export const RARITY_ORDER = ['common', 'uncommon', 'rare', 'super_rare', 'legend'];
 
 export const RARITY_STYLES = {
   common: {
@@ -16,10 +16,15 @@ export const RARITY_STYLES = {
     cardBg: '#38BDF8',
     tier: 2,
   },
+  super_rare: {
+    label: 'スーパーレア',
+    cardBg: '#A3E635',
+    tier: 3,
+  },
   legend: {
     label: 'レジェンド',
     cardBg: '#F6C116',
-    tier: 3,
+    tier: 4,
   },
 };
 
@@ -291,6 +296,64 @@ function createSpearBallSvg() {
   `.trim();
 }
 
+function createRedLaserBallSvg() {
+  return `
+    <svg viewBox="0 0 64 64" class="ball-vector-svg" aria-hidden="true">
+      <circle cx="32" cy="32" r="27" fill="#EF4444" stroke="#000000" stroke-width="4" />
+      <path d="M10 38 A24 24 0 0 0 54 38 A26 22 0 0 1 10 38 Z" fill="#991B1B" opacity="0.62" />
+      <circle cx="32" cy="32" r="19" fill="#FB7185" opacity="0.46" />
+      <!-- High-output crimson emitter core -->
+      <circle cx="32" cy="32" r="13.5" fill="#111827" stroke="#000000" stroke-width="2.5" />
+      <circle cx="32" cy="32" r="9" fill="#DC2626" stroke="#FCA5A5" stroke-width="2" />
+      <circle cx="32" cy="32" r="4.2" fill="#FEF08A" />
+      <!-- Heavy crimson laser flares -->
+      <path d="M7 32 L17.5 32 M46.5 32 L59 32" stroke="#FEF08A" stroke-width="4.4" stroke-linecap="round" />
+      <path d="M47 25 L57 20 M47 39 L57 44" stroke="#FCA5A5" stroke-width="2.8" stroke-linecap="round" />
+      <ellipse cx="20" cy="15" rx="6.8" ry="3.2" transform="rotate(-25 20 15)" fill="#FFFFFF" opacity="0.86" />
+    </svg>
+  `.trim();
+}
+
+function createOneShotBallSvg() {
+  return `
+    <svg viewBox="0 0 64 64" class="ball-vector-svg" aria-hidden="true">
+      <circle cx="32" cy="32" r="27" fill="#F59E0B" stroke="#000000" stroke-width="4" />
+      <path d="M10 38 A24 24 0 0 0 54 38 A26 22 0 0 1 10 38 Z" fill="#B45309" opacity="0.56" />
+      <!-- Target concentric bullseye rings -->
+      <circle cx="32" cy="32" r="19" fill="#FFFBEB" stroke="#000000" stroke-width="2.6" />
+      <circle cx="32" cy="32" r="12.5" fill="#EF4444" stroke="#000000" stroke-width="2.4" />
+      <circle cx="32" cy="32" r="5.5" fill="#FDE047" stroke="#000000" stroke-width="2" />
+      <!-- Precision crosshair lines -->
+      <path d="M32 6 V18 M32 46 V58 M6 32 H18 M46 32 H58" stroke="#000000" stroke-width="3.2" stroke-linecap="round" />
+      <path d="M32 6 V18 M32 46 V58 M6 32 H18 M46 32 H58" stroke="#FEF08A" stroke-width="1.5" stroke-linecap="round" />
+      <ellipse cx="20" cy="15" rx="6" ry="2.8" transform="rotate(-24 20 15)" fill="#FFFFFF" opacity="0.85" />
+    </svg>
+  `.trim();
+}
+
+function createMagicianBallSvg() {
+  return `
+    <svg viewBox="0 0 64 64" class="ball-vector-svg" aria-hidden="true">
+      <!-- Orbiting elemental orbs (Fire, Ice, Thunder) -->
+      <circle cx="11" cy="36" r="5.5" fill="#EF4444" stroke="#000000" stroke-width="2.2" />
+      <circle cx="53" cy="36" r="5.5" fill="#38BDF8" stroke="#000000" stroke-width="2.2" />
+      <circle cx="50" cy="17" r="4.8" fill="#FACC15" stroke="#000000" stroke-width="2.2" />
+      <!-- Mage body -->
+      <circle cx="32" cy="38" r="21" fill="#7C3AED" stroke="#000000" stroke-width="4" />
+      <path d="M13 43 A20 20 0 0 0 51 43 A22 18 0 0 1 13 43 Z" fill="#4C1D95" opacity="0.58" />
+      <!-- Glowing mage eyes -->
+      <ellipse cx="25.5" cy="38.5" rx="2.6" ry="3.4" fill="#FDE047" />
+      <ellipse cx="38.5" cy="38.5" rx="2.6" ry="3.4" fill="#FDE047" />
+      <!-- Wizard Hat -->
+      <path d="M10 26 Q32 20 54 26 Q32 30 10 26 Z" fill="#312E81" stroke="#000000" stroke-width="3" stroke-linejoin="round" />
+      <path d="M19 24 L31 4 L45 24 Z" fill="#4338CA" stroke="#000000" stroke-width="3" stroke-linejoin="round" />
+      <path d="M20 22 Q32 24.5 44 22" fill="none" stroke="#F6C116" stroke-width="3.2" stroke-linecap="round" />
+      <!-- Star emblem on hat -->
+      <polygon points="32,11 33.8,14.8 38,15.3 34.8,18 35.6,22 32,20 28.4,22 29.2,18 26,15.3 30.2,14.8" fill="#FDE047" stroke="#000000" stroke-width="1.2" stroke-linejoin="round" />
+    </svg>
+  `.trim();
+}
+
 function createRivalBallSvg() {
   return `
     <svg viewBox="0 0 64 64" class="ball-vector-svg" aria-hidden="true">
@@ -405,7 +468,7 @@ export const BALL_CATALOG = {
   },
   laser_ball: {
     id: 'laser_ball',
-    name: 'レーザーボール',
+    name: 'ブルーレーザーボール',
     rarity: 'rare',
     level: 1,
     hp: 15,
@@ -472,6 +535,48 @@ export const BALL_CATALOG = {
     abilityTitle: '特殊能力',
     ability: '死亡時、奥まで刺し、相手の先頭と先頭の1つ後ろのボールに攻撃力×1.5のダメージを与える。',
     svg: createSpearBallSvg(),
+  },
+  red_laser_ball: {
+    id: 'red_laser_ball',
+    name: 'レッドレーザーボール',
+    rarity: 'super_rare',
+    level: 1,
+    hp: 18,
+    atk: 5,
+    attributes: ['貫通'],
+    piercing: true,
+    isPhysical: false,
+    abilityTitle: '特殊能力（デバフ / 属性：貫通）',
+    ability: '3ターンに1度しか攻撃できない（2ターン充填し、3ターン目に高威力レーザーを放つ）。レーザーは物理攻撃ではないため、パリィを無視して貫通する。',
+    svg: createRedLaserBallSvg(),
+  },
+  one_shot_ball: {
+    id: 'one_shot_ball',
+    name: '一発ボール',
+    rarity: 'super_rare',
+    level: 1,
+    hp: 21,
+    atk: 2,
+    attributes: [],
+    piercing: false,
+    isPhysical: true,
+    abilityTitle: '特殊能力',
+    ability: 'タイピング（1単語）を打つのを1文字ミスるごとにHPが1減り、ミスなしでパーフェクト達成するとHPを0.5回復して攻撃力×1.1倍を取得する。',
+    svg: createOneShotBallSvg(),
+  },
+  magician_ball: {
+    id: 'magician_ball',
+    name: 'マジシャンボール',
+    rarity: 'super_rare',
+    level: 1,
+    hp: 24,
+    atk: 1.9,
+    attributes: [],
+    piercing: false,
+    isPhysical: true,
+    abilityTitle: '特殊能力',
+    ability: '5回に1度、攻撃時に「炎攻撃（1.5倍＋2T火：毎T1ダメ）」「氷攻撃（3T氷：毎T0.8ダメ＋35%行動不能）」「雷攻撃（1.3倍＋1Tスタン：行動不能）」の3つから選んで攻撃できる。',
+    svg: createMagicianBallSvg(),
   },
 };
 

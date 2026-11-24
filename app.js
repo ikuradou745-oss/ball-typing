@@ -42,17 +42,23 @@ import {
   prepareNextTypingWord,
 } from './lib/typingComboHelpers.js';
 import {
+  MAGICIAN_SPELLS,
   advanceTreeBallGrowth,
   applyHealToUnit,
+  applyOneShotMistake,
+  applyOneShotPerfect,
   clearTreeGrowthOnDefeat,
   computeBandageAllyHeal,
   computeBandageSelfHeal,
   computeSpearDeathStrike,
   doesFrontAbilitySkipAttack,
   formatStat,
+  pickRandomMagicianSpell,
+  processStartOfTurnStatuses,
   resolveEnemyTargetRarity,
   resolveParryOnDefender,
   roundStat,
+  shouldTriggerMagicianSpell,
 } from './lib/ballCombatHelpers.js';
 import {
   ACTIVE_BATTLE_STORAGE_KEY,
@@ -670,6 +676,10 @@ const battleResumeSummary = document.getElementById('battle-resume-summary');
 const battleResumeContinueBtn = document.getElementById('battle-resume-continue-btn');
 const battleResumeHomeBtn = document.getElementById('battle-resume-home-btn');
 
+const magicianChoiceModal = document.getElementById('magician-choice-modal');
+const magicianSpellButtons = Array.from(document.querySelectorAll('[data-magician-spell]'));
+let pendingMagicianResolver = null;
+
 const pixelCells = [];
 const swatchButtons = [];
 
@@ -1057,6 +1067,10 @@ function createFlowerUnit(summonerUnit) {
     atkDebuffTurns: 0,
     atkMultiplier: 1,
     missDebuffTurns: 0,
+    burnTurns: 0,
+    iceTurns: 0,
+    stunTurns: 0,
+    oneShotPerfectCount: 0,
     dead: false,
   };
 }
@@ -1197,8 +1211,38 @@ function createBattleUnitElement(unit, isEnemy, isFrontTank, isFrontAttacker) {
         chips.push('<span class="battle-unit-status-chip battle-chip-tree-bloom">開花済み</span>');
       }
     }
+    if (unit.ballId === 'red_laser_ball') {
+      const rem = unit.turnCounter % 3;
+      if (rem === 2) {
+        chips.push('<span class="battle-unit-status-chip battle-chip-red-laser-ready">次ターン発射!</span>');
+      } else {
+        chips.push(`<span class="battle-unit-status-chip battle-chip-red-laser">充填${rem}/3</span>`);
+      }
+    }
+    if (unit.ballId === 'one_shot_ball' && (unit.oneShotPerfectCount || 0) > 0) {
+      chips.push(
+        `<span class="battle-unit-status-chip battle-chip-oneshot">攻×1.1 ×${unit.oneShotPerfectCount}</span>`
+      );
+    }
+    if (unit.ballId === 'magician_ball') {
+      const charge = unit.attacksMade % 5;
+      chips.push(
+        charge === 4
+          ? '<span class="battle-unit-status-chip battle-chip-magician-ready">次 魔法選択!</span>'
+          : `<span class="battle-unit-status-chip battle-chip-magician">魔法${charge}/5</span>`
+      );
+    }
     if (unit.isHardened) {
       chips.push('<span class="battle-unit-status-chip battle-chip-shield">固まる</span>');
+    }
+    if ((unit.burnTurns || 0) > 0) {
+      chips.push(`<span class="battle-unit-status-chip battle-chip-burn">火(${unit.burnTurns})</span>`);
+    }
+    if ((unit.iceTurns || 0) > 0) {
+      chips.push(`<span class="battle-unit-status-chip battle-chip-ice">氷(${unit.iceTurns})</span>`);
+    }
+    if ((unit.stunTurns || 0) > 0) {
+      chips.push(`<span class="battle-unit-status-chip battle-chip-stun">スタン(${unit.stunTurns})</span>`);
     }
     if (unit.atkDebuffTurns > 0) {
       chips.push(
@@ -1496,6 +1540,9 @@ async function handleUnitDefeat(unit, opposingTeam, ownTeam, sessionId) {
   unit.atkDebuffTurns = 0;
   unit.atkMultiplier = 1;
   unit.missDebuffTurns = 0;
+  unit.burnTurns = 0;
+  unit.iceTurns = 0;
+  unit.stunTurns = 0;
 
   if (unit.isWall) return;
 
@@ -1670,9 +1717,80 @@ async function runBenchBandageHealing(team, activeFrontUnit, sessionId) {
   }
 }
 
+function resolvePendingMagicianChoice(spellId) {
+  if (magicianChoiceModal) {
+    magicianChoiceModal.classList.add('hidden');
+  }
+  if (pendingMagicianResolver) {
+    const fn = pendingMagicianResolver;
+    pendingMagicianResolver = null;
+    fn(spellId || null);
+  }
+}
+
+function promptMagicianSpellChoice(sessionId) {
+  if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') {
+    return Promise.resolve(null);
+  }
+  resolvePendingMagicianChoice(null);
+  playOpenSound(profile.volume);
+  magicianChoiceModal.classList.remove('hidden');
+  return new Promise((resolve) => {
+    pendingMagicianResolver = resolve;
+  });
+}
+
 async function executeUnitTurn(attacker, ownTeam, defenderTeam, isPlayerAttacker, typingMultiplier, sessionId) {
-  attacker.turnCounter += 1;
   attacker.isHardened = false;
+
+  // Start-of-turn Burn / Ice / Stun status ticks (Magician Ball)
+  if ((attacker.burnTurns || 0) > 0 || (attacker.iceTurns || 0) > 0 || (attacker.stunTurns || 0) > 0) {
+    const statusOutcome = processStartOfTurnStatuses(attacker);
+    if (statusOutcome.burnDamage > 0 || statusOutcome.iceDamage > 0) {
+      renderBattleUnits();
+      if (statusOutcome.died) {
+        playKnockoutSound(profile.volume);
+      } else {
+        playAttackHitSound(profile.volume, false);
+      }
+      if (statusOutcome.burnDamage > 0) {
+        showUnitImpactAndPopup(
+          attacker.uid,
+          `-${formatStat(statusOutcome.burnDamage)} (火傷!)`,
+          'battle-float-fire',
+          true
+        );
+      }
+      if (statusOutcome.iceDamage > 0) {
+        showUnitImpactAndPopup(
+          attacker.uid,
+          `-${formatStat(statusOutcome.iceDamage)} (氷!)`,
+          'battle-float-ice',
+          true
+        );
+      }
+      await battleDelay(300);
+      if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
+      if (statusOutcome.died) {
+        await handleUnitDefeat(attacker, defenderTeam, ownTeam, sessionId);
+        return;
+      }
+    }
+    if (statusOutcome.incapacitated) {
+      renderBattleUnits();
+      playErrorSound(profile.volume);
+      showUnitImpactAndPopup(
+        attacker.uid,
+        statusOutcome.stunned ? 'スタン! 行動不能' : '凍結! 行動不能',
+        statusOutcome.stunned ? 'battle-float-thunder' : 'battle-float-ice',
+        false
+      );
+      await battleDelay(320);
+      return;
+    }
+  }
+
+  attacker.turnCounter += 1;
 
   // Stone Ball: every 3rd turn enters "固まる" state (halves incoming damage, skips attack)
   if (attacker.ballId === 'stone_ball' && attacker.turnCounter % 3 === 0) {
@@ -1684,7 +1802,7 @@ async function executeUnitTurn(attacker, ownTeam, defenderTeam, isPlayerAttacker
     if (doesFrontAbilitySkipAttack(attacker.ballId, attacker.turnCounter)) return;
   }
 
-  // Laser Ball: every 3rd turn charges laser without attacking (next attack deals 2.5x)
+  // Blue Laser Ball: every 3rd turn charges laser without attacking (next attack deals 2.5x)
   if (attacker.ballId === 'laser_ball' && attacker.turnCounter % 3 === 0) {
     attacker.laserCharged = true;
     renderBattleUnits();
@@ -1692,6 +1810,24 @@ async function executeUnitTurn(attacker, ownTeam, defenderTeam, isPlayerAttacker
     showUnitImpactAndPopup(attacker.uid, 'レーザーチャージ!', 'battle-float-laser', false);
     await battleDelay(320);
     if (doesFrontAbilitySkipAttack(attacker.ballId, attacker.turnCounter)) return;
+  }
+
+  // Red Laser Ball: debuff — can only attack once every 3 turns
+  if (
+    attacker.ballId === 'red_laser_ball' &&
+    doesFrontAbilitySkipAttack(attacker.ballId, attacker.turnCounter)
+  ) {
+    const cycleStep = attacker.turnCounter % 3;
+    renderBattleUnits();
+    playOpenSound(profile.volume);
+    showUnitImpactAndPopup(
+      attacker.uid,
+      `赤レーザー充填中 (${cycleStep}/3)`,
+      'battle-float-red-laser',
+      false
+    );
+    await battleDelay(320);
+    return;
   }
 
   // Bandage Ball: every 4th turn heals self by 18% of max HP (max 8, rounded to 0.01) AND still attacks!
@@ -1762,6 +1898,27 @@ async function executeUnitTurn(attacker, ownTeam, defenderTeam, isPlayerAttacker
     }
   }
 
+  const willCastMagicianSpell = shouldTriggerMagicianSpell(attacker);
+  let chosenSpell = null;
+  if (willCastMagicianSpell) {
+    const spellKey = isPlayerAttacker
+      ? await promptMagicianSpellChoice(sessionId)
+      : pickRandomMagicianSpell();
+    if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
+    chosenSpell = MAGICIAN_SPELLS[spellKey || 'fire'] || MAGICIAN_SPELLS.fire;
+    if (!isPlayerAttacker) {
+      const spellPopupCls =
+        chosenSpell.id === 'fire'
+          ? 'battle-float-fire'
+          : chosenSpell.id === 'ice'
+            ? 'battle-float-ice'
+            : 'battle-float-thunder';
+      showUnitImpactAndPopup(attacker.uid, `魔法: ${chosenSpell.label}!`, spellPopupCls, false);
+      await battleDelay(240);
+      if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
+    }
+  }
+
   attacker.attacksMade += 1;
   let dmg = attacker.atk * (isPlayerAttacker ? typingMultiplier : 1);
 
@@ -1779,11 +1936,16 @@ async function executeUnitTurn(attacker, ownTeam, defenderTeam, isPlayerAttacker
     dmg *= 2.5;
     isLaserShot = true;
   }
+  const isRedLaserShot = attacker.ballId === 'red_laser_ball';
 
   let isRubberCrit = false;
   if (attacker.ballId === 'rubber_ball' && attacker.attacksMade % 2 === 0) {
     dmg *= 1.5;
     isRubberCrit = true;
+  }
+
+  if (chosenSpell) {
+    dmg *= chosenSpell.atkMultiplier;
   }
 
   const isSuperJump = attacker.ballId === 'super_ball' && attacker.attacksMade % 3 === 0;
@@ -1813,9 +1975,10 @@ async function executeUnitTurn(attacker, ownTeam, defenderTeam, isPlayerAttacker
   await battleDelay(isSuperJump ? 260 : 210);
   if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
 
-  // Sword Ball 4th-incoming-attack Parry check (invalid against piercing or non-physical attacks like Laser)
+  // Sword Ball 4th-incoming-attack Parry check (invalid against piercing or non-physical attacks like Laser / Magician spells)
+  const attackIsPhysical = chosenSpell ? false : attacker.isPhysical !== false;
   const parryResult = resolveParryOnDefender(defender, dmg, {
-    isPhysical: attacker.isPhysical !== false,
+    isPhysical: attackIsPhysical,
     isPiercing: Boolean(attacker.piercing),
   });
 
@@ -1847,6 +2010,8 @@ async function executeUnitTurn(attacker, ownTeam, defenderTeam, isPlayerAttacker
   const isStrongHit =
     (isPlayerAttacker && typingMultiplier > 1) ||
     isLaserShot ||
+    isRedLaserShot ||
+    Boolean(chosenSpell) ||
     isRubberCrit ||
     isSuperJump ||
     isBushAttack;
@@ -1864,25 +2029,49 @@ async function executeUnitTurn(attacker, ownTeam, defenderTeam, isPlayerAttacker
     if (isBushAttack) {
       defender.missDebuffTurns = 2;
     }
+    if (chosenSpell) {
+      if (chosenSpell.burnTurns > 0) defender.burnTurns = chosenSpell.burnTurns;
+      if (chosenSpell.iceTurns > 0) defender.iceTurns = chosenSpell.iceTurns;
+      if (chosenSpell.stunTurns > 0) defender.stunTurns = chosenSpell.stunTurns;
+    }
   }
 
   renderBattleUnits();
 
   let dmgLabel = `-${formatStat(dmg)}`;
   if (isLaserShot) dmgLabel += ' (レーザー2.5倍!)';
+  else if (isRedLaserShot) dmgLabel += ' (赤レーザー!)';
+  else if (chosenSpell) dmgLabel += ` (${chosenSpell.label}!)`;
   else if (isRubberCrit) dmgLabel += ' (1.5倍!)';
   else if (isPlayerAttacker && typingMultiplier > 1) dmgLabel += ` (×${typingMultiplier.toFixed(1)})`;
   if (wasHalved) dmgLabel += ' (半減)';
 
-  showUnitImpactAndPopup(
-    defender.uid,
-    dmgLabel,
-    isLaserShot ? 'battle-float-laser' : isStrongHit ? 'battle-float-crit' : 'battle-float-dmg',
-    true
-  );
+  const dmgPopupClass = isLaserShot
+    ? 'battle-float-laser'
+    : isRedLaserShot
+      ? 'battle-float-red-laser'
+      : chosenSpell
+        ? chosenSpell.id === 'fire'
+          ? 'battle-float-fire'
+          : chosenSpell.id === 'ice'
+            ? 'battle-float-ice'
+            : 'battle-float-thunder'
+        : isStrongHit
+          ? 'battle-float-crit'
+          : 'battle-float-dmg';
+
+  showUnitImpactAndPopup(defender.uid, dmgLabel, dmgPopupClass, true);
 
   if (parryResult.bypassedByPierce) {
     showUnitImpactAndPopup(defender.uid, '貫通! パリィ無効', 'battle-float-laser', false);
+  } else if (!defender.dead && chosenSpell) {
+    if (chosenSpell.id === 'fire') {
+      showUnitImpactAndPopup(defender.uid, '火状態 (2ターン)!', 'battle-float-fire', false);
+    } else if (chosenSpell.id === 'ice') {
+      showUnitImpactAndPopup(defender.uid, '氷状態 (3ターン)!', 'battle-float-ice', false);
+    } else if (chosenSpell.id === 'thunder') {
+      showUnitImpactAndPopup(defender.uid, 'スタン (1ターン)!', 'battle-float-thunder', false);
+    }
   } else if (!defender.dead && isSuperJump) {
     showUnitImpactAndPopup(defender.uid, '特大ジャンプ! 攻75%', 'battle-float-debuff', false);
   } else if (!defender.dead && isBushAttack) {
@@ -1978,6 +2167,32 @@ async function resolveCombatRound(typingMultiplier) {
   saveActiveBattleSnapshot();
 }
 
+async function resolveOneShotMistakeDefeat(unit, sessionId) {
+  if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
+  battleState.isResolvingTurn = true;
+  playKnockoutSound(profile.volume);
+  await handleUnitDefeat(unit, battleState.enemyTeam, battleState.playerTeam, sessionId);
+  if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
+
+  if (battleState.enemyTeam.every((u) => u.dead)) {
+    await battleDelay(420);
+    if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
+    openBattleResultModal(true);
+    return;
+  }
+
+  if (battleState.playerTeam.every((u) => u.dead || u.isWall)) {
+    await battleDelay(420);
+    if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
+    openBattleResultModal(false);
+    return;
+  }
+
+  battleState.isResolvingTurn = false;
+  renderBattleUnits();
+  saveActiveBattleSnapshot();
+}
+
 function handleTypingChar(rawChar) {
   if (
     currentScreen !== 'battle' ||
@@ -1992,6 +2207,7 @@ function handleTypingChar(rawChar) {
     !enemyGuideModal.classList.contains('hidden') ||
     !nextBallGuideModal.classList.contains('hidden') ||
     !battleResumeModal.classList.contains('hidden') ||
+    !magicianChoiceModal.classList.contains('hidden') ||
     !surveyModal.classList.contains('hidden') ||
     !adminCrownModal.classList.contains('hidden') ||
     !presenceModal.classList.contains('hidden')
@@ -2012,6 +2228,23 @@ function handleTypingChar(rawChar) {
       const completed = completeTypingWord(battleState);
       Object.assign(battleState, completed.state);
       playSaveSound(profile.volume);
+
+      if (!completed.hadMistake) {
+        const frontPlayer = battleState.playerTeam.find((u) => !u.dead && !u.isWall);
+        const oneShotRes = applyOneShotPerfect(frontPlayer);
+        if (oneShotRes.triggered) {
+          renderBattleUnits();
+          showUnitImpactAndPopup(
+            frontPlayer.uid,
+            oneShotRes.healed > 0
+              ? `+${formatStat(oneShotRes.healed)}HP 攻×1.1!`
+              : '攻×1.1!',
+            'battle-float-oneshot',
+            false
+          );
+        }
+      }
+
       renderBattleTyping();
       saveActiveBattleSnapshot();
       resolveCombatRound(completed.multiplier);
@@ -2025,7 +2258,6 @@ function handleTypingChar(rawChar) {
     Object.assign(battleState, mistake.state);
     playErrorSound(profile.volume);
     renderBattleHudStrip();
-    saveActiveBattleSnapshot();
     if (mistake.outcome !== 'no_shield_miss' && typingShieldEmblem) {
       typingShieldEmblem.classList.remove('typing-shield-hit');
       void typingShieldEmblem.offsetWidth;
@@ -2036,12 +2268,25 @@ function handleTypingChar(rawChar) {
     typingErrorTimer = setTimeout(() => {
       battleTypingBox.classList.remove('typing-error-flash');
     }, 180);
+
+    const frontPlayer = battleState.playerTeam.find((u) => !u.dead && !u.isWall);
+    const oneShotPenalty = applyOneShotMistake(frontPlayer);
+    if (oneShotPenalty.triggered) {
+      renderBattleUnits();
+      showUnitImpactAndPopup(frontPlayer.uid, '-1 (ミス!)', 'battle-float-dmg', true);
+      if (oneShotPenalty.died) {
+        resolveOneShotMistakeDefeat(frontPlayer, battleState.sessionId);
+        return;
+      }
+    }
+    saveActiveBattleSnapshot();
   }
 }
 
 function startVsMatchmaking() {
   if (isMatchmaking) return;
   isMatchmaking = true;
+  resolvePendingMagicianChoice(null);
   clearActiveBattleSnapshot();
   battleResultModal.classList.add('hidden');
   playOpenSound(profile.volume);
@@ -2108,6 +2353,7 @@ function setScreen(screen) {
   const isBattle = currentScreen === 'battle';
 
   if (!isBattle) {
+    resolvePendingMagicianChoice(null);
     battleSessionCounter += 1;
     battleState = null;
     battleResultModal.classList.add('hidden');
@@ -2445,6 +2691,14 @@ ballDetailModal.addEventListener('click', (e) => {
   if (e.target === ballDetailModal) {
     closeBallDetailModal();
   }
+});
+
+magicianSpellButtons.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const spell = btn.dataset.magicianSpell;
+    playClickSound(profile.volume);
+    resolvePendingMagicianChoice(spell);
+  });
 });
 
 battleRetryBtn.addEventListener('click', () => {

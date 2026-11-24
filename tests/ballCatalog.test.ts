@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   BALL_CATALOG,
   FLOWER_UNIT_SVG,
+  RARITY_ORDER,
   RARITY_STYLES,
   SEED_UNIT_SVG,
   SPROUT_UNIT_SVG,
@@ -10,17 +11,22 @@ import {
   getCatalogBallsByRarity,
 } from '../assets/ballImages.js';
 import {
+  MAGICIAN_SPELLS,
   advanceTreeBallGrowth,
   applyHealToUnit,
+  applyOneShotMistake,
+  applyOneShotPerfect,
   clearTreeGrowthOnDefeat,
   computeBandageAllyHeal,
   computeBandageSelfHeal,
   computeSpearDeathStrike,
   doesFrontAbilitySkipAttack,
   getRarityUpgradeChance,
+  processStartOfTurnStatuses,
   resolveEnemyTargetRarity,
   resolveParryOnDefender,
   roundStat,
+  shouldTriggerMagicianSpell,
 } from '../lib/ballCombatHelpers.js';
 
 test('bandage_ball does NOT skip front attack on turn 4 heal turn (while stone/laser charge on turn 3)', () => {
@@ -50,7 +56,7 @@ test('rare rarity style is light blue and laser_ball, sword_ball, bandage_ball a
   assert.equal(RARITY_STYLES.rare.cardBg, '#38BDF8');
 
   const laser = BALL_CATALOG.laser_ball;
-  assert.equal(laser.name, 'レーザーボール');
+  assert.equal(laser.name, 'ブルーレーザーボール');
   assert.equal(laser.rarity, 'rare');
   assert.equal(laser.hp, 15);
   assert.equal(laser.atk, 1.5);
@@ -226,5 +232,145 @@ test('spear_ball on-death pierces opposing front and second unit for ATK * 1.5 o
   assert.equal(singleStrikes[0].target.uid, 'e_only');
   assert.equal(singleStrikes[0].damage, 1.8);
 });
+
+test('super_rare rarity follows rare in yellow-green and registers red_laser_ball, one_shot_ball, magician_ball', () => {
+  assert.deepEqual(RARITY_ORDER, ['common', 'uncommon', 'rare', 'super_rare', 'legend']);
+  assert.equal(RARITY_STYLES.super_rare.label, 'スーパーレア');
+  assert.equal(RARITY_STYLES.super_rare.cardBg, '#A3E635');
+  assert.equal(RARITY_STYLES.super_rare.tier, 3);
+  assert.equal(RARITY_STYLES.legend.tier, 4);
+
+  const redLaser = BALL_CATALOG.red_laser_ball;
+  assert.equal(redLaser.name, 'レッドレーザーボール');
+  assert.equal(redLaser.rarity, 'super_rare');
+  assert.equal(redLaser.hp, 18);
+  assert.equal(redLaser.atk, 5);
+  assert.equal(redLaser.piercing, true);
+  assert.equal(redLaser.isPhysical, false);
+
+  const oneShot = BALL_CATALOG.one_shot_ball;
+  assert.equal(oneShot.name, '一発ボール');
+  assert.equal(oneShot.rarity, 'super_rare');
+  assert.equal(oneShot.hp, 21);
+  assert.equal(oneShot.atk, 2);
+
+  const magician = BALL_CATALOG.magician_ball;
+  assert.equal(magician.name, 'マジシャンボール');
+  assert.equal(magician.rarity, 'super_rare');
+  assert.equal(magician.hp, 24);
+  assert.equal(magician.atk, 1.9);
+
+  const superRares = getCatalogBallsByRarity('super_rare').map((b) => b.id).sort();
+  assert.deepEqual(superRares, ['magician_ball', 'one_shot_ball', 'red_laser_ball']);
+
+  // Rare -> Super Rare upgrade probability is 1.25% when owning 6+ rare balls
+  assert.equal(getRarityUpgradeChance('rare'), 0.0125);
+  assert.equal(resolveEnemyTargetRarity('rare', 5, true, 0.005).upgraded, false);
+  assert.equal(resolveEnemyTargetRarity('rare', 6, true, 0.0124).upgraded, true);
+  assert.equal(resolveEnemyTargetRarity('rare', 6, true, 0.0125).upgraded, false);
+});
+
+test('red_laser_ball can only attack once every 3 turns', () => {
+  assert.equal(doesFrontAbilitySkipAttack('red_laser_ball', 1), true);
+  assert.equal(doesFrontAbilitySkipAttack('red_laser_ball', 2), true);
+  assert.equal(doesFrontAbilitySkipAttack('red_laser_ball', 3), false);
+  assert.equal(doesFrontAbilitySkipAttack('red_laser_ball', 4), true);
+  assert.equal(doesFrontAbilitySkipAttack('red_laser_ball', 6), false);
+});
+
+test('one_shot_ball loses 1 HP per typing mistake and gains +0.5 HP & x1.1 ATK on perfect word', () => {
+  const unit = {
+    ballId: 'one_shot_ball',
+    maxHp: 21,
+    hp: 21,
+    atk: 2,
+    oneShotPerfectCount: 0,
+    dead: false,
+  };
+
+  // Mistake deducts 1 HP
+  const m1 = applyOneShotMistake(unit);
+  assert.equal(m1.triggered, true);
+  assert.equal(m1.damage, 1);
+  assert.equal(m1.died, false);
+  assert.equal(unit.hp, 20);
+
+  // Perfect word heals +0.5 HP and multiplies ATK by 1.1
+  const p1 = applyOneShotPerfect(unit);
+  assert.equal(p1.triggered, true);
+  assert.equal(p1.healed, 0.5);
+  assert.equal(unit.hp, 20.5);
+  assert.equal(unit.atk, 2.2);
+  assert.equal(unit.oneShotPerfectCount, 1);
+
+  // Another perfect caps HP at 21 and stacks x1.1 ATK
+  const p2 = applyOneShotPerfect(unit);
+  assert.equal(p2.healed, 0.5);
+  assert.equal(unit.hp, 21);
+  assert.equal(unit.atk, 2.42);
+  assert.equal(unit.oneShotPerfectCount, 2);
+
+  // Lethal mistake at 1 HP kills the unit
+  unit.hp = 1;
+  const lethal = applyOneShotMistake(unit);
+  assert.equal(lethal.died, true);
+  assert.equal(unit.hp, 0);
+  assert.equal(unit.dead, true);
+});
+
+test('magician_ball triggers spell every 5th attack and processes burn, ice, and stun statuses', () => {
+  const mage = { ballId: 'magician_ball', dead: false, attacksMade: 0 };
+  for (let i = 0; i < 4; i++) {
+    assert.equal(shouldTriggerMagicianSpell(mage), false);
+    mage.attacksMade += 1;
+  }
+  // 5th attack triggers spell choice
+  assert.equal(shouldTriggerMagicianSpell(mage), true);
+
+  assert.equal(MAGICIAN_SPELLS.fire.atkMultiplier, 1.5);
+  assert.equal(MAGICIAN_SPELLS.fire.burnTurns, 2);
+  assert.equal(MAGICIAN_SPELLS.ice.atkMultiplier, 1.0);
+  assert.equal(MAGICIAN_SPELLS.ice.iceTurns, 3);
+  assert.equal(MAGICIAN_SPELLS.thunder.atkMultiplier, 1.3);
+  assert.equal(MAGICIAN_SPELLS.thunder.stunTurns, 1);
+
+  // Burn deals 1 damage/turn for 2 turns
+  const burned = { hp: 10, maxHp: 10, burnTurns: 2, iceTurns: 0, stunTurns: 0, dead: false };
+  const b1 = processStartOfTurnStatuses(burned);
+  assert.equal(b1.burnDamage, 1);
+  assert.equal(burned.hp, 9);
+  assert.equal(burned.burnTurns, 1);
+  assert.equal(b1.incapacitated, false);
+
+  // Ice deals 0.8 damage/turn and incapacitates when roll < 0.35
+  const iced = { hp: 10, maxHp: 10, burnTurns: 0, iceTurns: 3, stunTurns: 0, dead: false };
+  const i1 = processStartOfTurnStatuses(iced, 0.34);
+  assert.equal(i1.iceDamage, 0.8);
+  assert.equal(iced.hp, 9.2);
+  assert.equal(iced.iceTurns, 2);
+  assert.equal(i1.froze, true);
+  assert.equal(i1.incapacitated, true);
+
+  const i2 = processStartOfTurnStatuses(iced, 0.35);
+  assert.equal(i2.iceDamage, 0.8);
+  assert.equal(iced.hp, 8.4);
+  assert.equal(i2.froze, false);
+  assert.equal(i2.incapacitated, false);
+
+  // Stun incapacitates for 1 turn
+  const stunned = { hp: 10, maxHp: 10, burnTurns: 0, iceTurns: 0, stunTurns: 1, dead: false };
+  const s1 = processStartOfTurnStatuses(stunned);
+  assert.equal(s1.stunned, true);
+  assert.equal(s1.incapacitated, true);
+  assert.equal(stunned.stunTurns, 0);
+
+  // Fatal burn marks unit dead cleanly
+  const dying = { hp: 0.9, maxHp: 10, burnTurns: 1, iceTurns: 2, stunTurns: 0, dead: false };
+  const d1 = processStartOfTurnStatuses(dying, 0.1);
+  assert.equal(d1.died, true);
+  assert.equal(dying.dead, true);
+  assert.equal(dying.hp, 0);
+});
+
 
 

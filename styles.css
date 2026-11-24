@@ -948,6 +948,46 @@ body {
   color: #9d174d;
 }
 
+.battle-chip-red-laser {
+  background-color: #fecaca;
+  color: #991b1b;
+}
+
+.battle-chip-red-laser-ready {
+  background-color: #ef4444;
+  color: #ffffff;
+}
+
+.battle-chip-oneshot {
+  background-color: #fef08a;
+  color: #854d0e;
+}
+
+.battle-chip-magician {
+  background-color: #ede9fe;
+  color: #5b21b6;
+}
+
+.battle-chip-magician-ready {
+  background-color: #7c3aed;
+  color: #ffffff;
+}
+
+.battle-chip-burn {
+  background-color: #fed7aa;
+  color: #9a3412;
+}
+
+.battle-chip-ice {
+  background-color: #bae6fd;
+  color: #075985;
+}
+
+.battle-chip-stun {
+  background-color: #fef08a;
+  color: #713f12;
+}
+
 .battle-unit-hit {
   animation: battle-hit-shake calc(240ms / var(--battle-speed, 1)) ease-in-out;
 }
@@ -1115,6 +1155,31 @@ body {
 .battle-float-spear {
   background-color: #0284c7;
   color: #ffffff;
+}
+
+.battle-float-red-laser {
+  background-color: #dc2626;
+  color: #fef08a;
+}
+
+.battle-float-oneshot {
+  background-color: #f59e0b;
+  color: #0f172a;
+}
+
+.battle-float-fire {
+  background-color: #ea580c;
+  color: #ffffff;
+}
+
+.battle-float-ice {
+  background-color: #0ea5e9;
+  color: #ffffff;
+}
+
+.battle-float-thunder {
+  background-color: #facc15;
+  color: #0f172a;
 }
 
 @keyframes float-pop {
@@ -1406,7 +1471,7 @@ body {
 
 .owned-balls-row {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
   gap: 12px;
   align-items: stretch;
   max-height: 336px;
@@ -1432,8 +1497,8 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 6px;
-  width: 108px;
-  min-height: 136px;
+  width: 124px;
+  min-height: 140px;
   padding: 7px;
   border: 3px solid #000000;
   border-radius: 10px;
@@ -1474,6 +1539,7 @@ body {
 
 .ball-card-top {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 2px;
@@ -1481,13 +1547,13 @@ body {
 }
 
 .ball-tag {
-  padding: 1px 3.5px;
+  padding: 1px 3px;
   border: 1.5px solid #000000;
   border-radius: 4px;
   background-color: #ffffff;
-  font-size: 8.5px;
+  font-size: 8px;
   font-weight: 900;
-  line-height: 1.25;
+  line-height: 1.2;
   color: #0f172a;
   white-space: nowrap;
 }
@@ -1512,12 +1578,12 @@ body {
   border: 2px solid #000000;
   border-radius: 6px;
   background-color: #ffffff;
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 900;
-  line-height: 1.2;
+  line-height: 1.25;
   color: #0f172a;
   text-align: center;
-  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 
 .ball-slot-empty {
@@ -1526,8 +1592,8 @@ body {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  width: 108px;
-  min-height: 136px;
+  width: 124px;
+  min-height: 140px;
   padding: 8px;
   border: 3px dashed #334155;
   border-radius: 10px;
@@ -2754,6 +2820,11 @@ body {
   color: #052e16;
 }
 
+.guide-rate-rare {
+  background-color: #38bdf8;
+  color: #082f49;
+}
+
 /* Survey & Admin Modal */
 .survey-auth-bar {
   display: flex;
@@ -3316,6 +3387,81 @@ body {
 .battle-resume-footer .btn-green,
 .battle-resume-footer .btn-white {
   min-width: 150px;
+}
+
+/* Magician Ball Spell Choice Modal */
+.magician-choice-dialog {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 500px;
+  overflow: hidden;
+  border-radius: 16px;
+  background-color: #fffdf7;
+}
+
+.magician-choice-header {
+  background-color: #7c3aed;
+}
+
+.magician-choice-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+}
+
+.magician-choice-lead {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 900;
+  color: #0f172a;
+  text-align: center;
+}
+
+.magician-choice-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.magician-spell-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.magician-spell-title {
+  font-size: 17px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.magician-spell-desc {
+  font-size: 12.5px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+.magician-spell-fire {
+  background-color: #ef4444;
+  color: #ffffff;
+}
+
+.magician-spell-ice {
+  background-color: #38bdf8;
+  color: #082f49;
+}
+
+.magician-spell-thunder {
+  background-color: #facc15;
+  color: #0f172a;
 }
 
 @media (max-width: 560px) {

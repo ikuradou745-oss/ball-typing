@@ -741,13 +741,17 @@
                 <span class="guide-rate-badge guide-rate-uncommon">アンコモン 6個以上</span>
                 <span>→ <strong>2.5%</strong> でレア（水色）が出現</span>
               </li>
+              <li>
+                <span class="guide-rate-badge guide-rate-rare">レア 6個以上</span>
+                <span>→ <strong>1.25%</strong> でスーパーレア（黄緑）が出現</span>
+              </li>
             </ul>
           </div>
 
           <div class="guide-card">
             <h3 class="guide-card-title">3. バトル勝利で仲間を増やそう</h3>
             <p class="guide-card-text">
-              勝利すると、敵チームにいたボールから<strong>好きな1体</strong>を選んで獲得できます。コモンを6個集めてアンコモン、アンコモンを6個集めてレア出現を目指そう！
+              勝利すると、敵チームにいたボールから<strong>好きな1体</strong>を選んで獲得できます。コモンを6個集めてアンコモン、アンコモンを6個集めてレア、レアを6個集めてスーパーレア出現を目指そう！
             </p>
           </div>
         </div>
@@ -1043,6 +1047,58 @@
           <button id="battle-resume-home-btn" type="button" class="arcade-btn btn-white hidden">
             ホームに戻る
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Magician Ball 5th-Attack Spell Selection Modal -->
+    <div
+      id="magician-choice-modal"
+      class="modal-backdrop hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="magician-choice-title"
+    >
+      <div class="arcade-card magician-choice-dialog">
+        <div class="modal-header magician-choice-header">
+          <h2 id="magician-choice-title" class="modal-title arcade-outline-white">マジシャンボール：魔法を選択！</h2>
+        </div>
+
+        <div class="magician-choice-body">
+          <p class="magician-choice-lead">
+            5回に1度の魔法攻撃！どの魔法で攻撃しますか？
+          </p>
+          <div class="magician-choice-grid">
+            <button
+              id="magician-spell-fire-btn"
+              type="button"
+              data-magician-spell="fire"
+              class="arcade-btn magician-spell-btn magician-spell-fire"
+            >
+              <span class="magician-spell-title">炎攻撃</span>
+              <span class="magician-spell-desc">攻撃力 1.5倍 ＋ 2ターン「火」（毎ターン1ダメージ）</span>
+            </button>
+
+            <button
+              id="magician-spell-ice-btn"
+              type="button"
+              data-magician-spell="ice"
+              class="arcade-btn magician-spell-btn magician-spell-ice"
+            >
+              <span class="magician-spell-title">氷攻撃</span>
+              <span class="magician-spell-desc">3ターン「氷」（毎ターン0.8ダメージ ＋ 35%で行動不能）</span>
+            </button>
+
+            <button
+              id="magician-spell-thunder-btn"
+              type="button"
+              data-magician-spell="thunder"
+              class="arcade-btn magician-spell-btn magician-spell-thunder"
+            >
+              <span class="magician-spell-title">雷攻撃</span>
+              <span class="magician-spell-desc">攻撃力 1.3倍 ＋ 1ターン「スタン」（行動不能）</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
