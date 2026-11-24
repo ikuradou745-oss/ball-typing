@@ -561,7 +561,7 @@ export const BALL_CATALOG = {
     piercing: false,
     isPhysical: true,
     abilityTitle: '特殊能力',
-    ability: 'タイピング（1単語）を打つのを1文字ミスるごとにHPが1減り、ミスなしでパーフェクト達成するとHPを0.5回復して攻撃力×1.1倍を取得する。',
+    ability: 'タイピング（1単語）を打つのを1文字ミスるごとにHPが1減り、攻撃力1.1倍ブーストも消滅する。ミスなしでパーフェクト達成するとHPを0.5回復し、攻撃力×1.1倍を取得する（重ねがけ不可）。',
     svg: createOneShotBallSvg(),
   },
   magician_ball: {

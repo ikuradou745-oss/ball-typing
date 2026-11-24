@@ -278,43 +278,66 @@ test('red_laser_ball can only attack once every 3 turns', () => {
   assert.equal(doesFrontAbilitySkipAttack('red_laser_ball', 6), false);
 });
 
-test('one_shot_ball loses 1 HP per typing mistake and gains +0.5 HP & x1.1 ATK on perfect word', () => {
+test('one_shot_ball loses 1 HP per typing mistake, resets x1.1 ATK boost on mistake, and does not stack x1.1 ATK', () => {
   const unit = {
     ballId: 'one_shot_ball',
     maxHp: 21,
     hp: 21,
+    baseAtk: 2,
     atk: 2,
     oneShotPerfectCount: 0,
     dead: false,
   };
 
-  // Mistake deducts 1 HP
+  // Mistake deducts 1 HP (no boost active yet)
   const m1 = applyOneShotMistake(unit);
   assert.equal(m1.triggered, true);
   assert.equal(m1.damage, 1);
   assert.equal(m1.died, false);
+  assert.equal(m1.lostAtkBoost, false);
   assert.equal(unit.hp, 20);
+  assert.equal(unit.atk, 2);
 
-  // Perfect word heals +0.5 HP and multiplies ATK by 1.1
+  // First perfect word heals +0.5 HP and applies x1.1 ATK (2 -> 2.2)
   const p1 = applyOneShotPerfect(unit);
   assert.equal(p1.triggered, true);
   assert.equal(p1.healed, 0.5);
+  assert.equal(p1.atkBoostApplied, true);
   assert.equal(unit.hp, 20.5);
   assert.equal(unit.atk, 2.2);
   assert.equal(unit.oneShotPerfectCount, 1);
 
-  // Another perfect caps HP at 21 and stacks x1.1 ATK
+  // Second perfect word still heals +0.5 HP (capped at 21) but does NOT stack x1.1 ATK
   const p2 = applyOneShotPerfect(unit);
   assert.equal(p2.healed, 0.5);
+  assert.equal(p2.atkBoostApplied, false);
   assert.equal(unit.hp, 21);
-  assert.equal(unit.atk, 2.42);
-  assert.equal(unit.oneShotPerfectCount, 2);
+  assert.equal(unit.atk, 2.2);
+  assert.equal(unit.oneShotPerfectCount, 1);
 
-  // Lethal mistake at 1 HP kills the unit
+  // Mistake removes the x1.1 ATK boost back to base ATK (2.2 -> 2)
+  const m2 = applyOneShotMistake(unit);
+  assert.equal(m2.triggered, true);
+  assert.equal(m2.damage, 1);
+  assert.equal(m2.lostAtkBoost, true);
+  assert.equal(unit.hp, 20);
+  assert.equal(unit.atk, 2);
+  assert.equal(unit.oneShotPerfectCount, 0);
+
+  // Re-earning perfect restores x1.1 ATK again
+  const p3 = applyOneShotPerfect(unit);
+  assert.equal(p3.atkBoostApplied, true);
+  assert.equal(unit.atk, 2.2);
+  assert.equal(unit.oneShotPerfectCount, 1);
+
+  // Lethal mistake at 1 HP kills the unit and clears boost
   unit.hp = 1;
   const lethal = applyOneShotMistake(unit);
   assert.equal(lethal.died, true);
+  assert.equal(lethal.lostAtkBoost, true);
   assert.equal(unit.hp, 0);
+  assert.equal(unit.atk, 2);
+  assert.equal(unit.oneShotPerfectCount, 0);
   assert.equal(unit.dead, true);
 });
 

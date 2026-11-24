@@ -168,8 +168,8 @@ test('serializeBattleState and deserializeBattleState round-trip mid-battle unit
         level: 1,
         maxHp: 21,
         hp: 19.5,
-        atk: 2.42,
-        oneShotPerfectCount: 2,
+        atk: 2.2,
+        oneShotPerfectCount: 1,
         svg: '<svg>oneshot</svg>',
         isWall: false,
         dead: false,
@@ -277,8 +277,8 @@ test('serializeBattleState and deserializeBattleState round-trip mid-battle unit
   assert.equal(restored.battleState.playerTeam[1].svg, WOOD_WALL_SVG);
   assert.equal(restored.battleState.playerTeam[2].laserCharged, true);
   assert.equal(restored.battleState.playerTeam[2].name, 'ブルーレーザーボール');
-  assert.equal(restored.battleState.playerTeam[3].atk, 2.42);
-  assert.equal(restored.battleState.playerTeam[3].oneShotPerfectCount, 2);
+  assert.equal(restored.battleState.playerTeam[3].atk, 2.2);
+  assert.equal(restored.battleState.playerTeam[3].oneShotPerfectCount, 1);
   assert.equal(restored.battleState.enemyTeam[0].parryCounter, 3);
   assert.equal(restored.battleState.enemyTeam[0].burnTurns, 2);
   assert.equal(restored.battleState.enemyTeam[0].iceTurns, 3);

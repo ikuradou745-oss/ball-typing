@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "node server.js",
     "start": "node server.js",
-    "build": "node --check server.js && node --check app.js && node --check firebaseClient.js && node --check lib/surveyHelpers.js && node --check lib/presenceHelpers.js && node --check lib/typingComboHelpers.js && node --check lib/ballCombatHelpers.js && node --check lib/ballProgressHelpers.js && node --check lib/adminAuthHelpers.js && node --check lib/adminCodeStatic.js && node --check lib/consoleGuard.js && node --check assets/ballImages.js",
-    "lint": "node --check server.js && node --check app.js && node --check firebaseClient.js && node --check lib/surveyHelpers.js && node --check lib/presenceHelpers.js && node --check lib/typingComboHelpers.js && node --check lib/ballCombatHelpers.js && node --check lib/ballProgressHelpers.js && node --check lib/adminAuthHelpers.js && node --check lib/adminCodeStatic.js && node --check lib/consoleGuard.js && node --check assets/ballImages.js"
+    "build": "node --check server.js && node --check app.js && node --check firebaseClient.js && node --check lib/surveyHelpers.js && node --check lib/presenceHelpers.js && node --check lib/typingComboHelpers.js && node --check lib/ballCombatHelpers.js && node --check lib/ballProgressHelpers.js && node --check lib/battleFxHelpers.js && node --check lib/adminAuthHelpers.js && node --check lib/adminCodeStatic.js && node --check lib/consoleGuard.js && node --check assets/ballImages.js",
+    "lint": "node --check server.js && node --check app.js && node --check firebaseClient.js && node --check lib/surveyHelpers.js && node --check lib/presenceHelpers.js && node --check lib/typingComboHelpers.js && node --check lib/ballCombatHelpers.js && node --check lib/ballProgressHelpers.js && node --check lib/battleFxHelpers.js && node --check lib/adminAuthHelpers.js && node --check lib/adminCodeStatic.js && node --check lib/consoleGuard.js && node --check assets/ballImages.js"
   },
   "dependencies": {
     "@firebase/eslint-plugin-security-rules": "^0.0.2",

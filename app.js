@@ -69,6 +69,12 @@ import {
   normalizePityWins,
   serializeBattleState,
 } from './lib/ballProgressHelpers.js';
+import {
+  getAttackFxSpec,
+  getBurstColorSpec,
+  getPersistentStatusClasses,
+  getStartOfTurnStatusFxList,
+} from './lib/battleFxHelpers.js';
 
 const GRID_SIZE = 16;
 const TOTAL_PIXELS = GRID_SIZE * GRID_SIZE;
@@ -974,6 +980,7 @@ function createUnitInstance(ball, uid) {
     level: ball.level,
     maxHp: ball.hp,
     hp: ball.hp,
+    baseAtk: ball.atk,
     atk: ball.atk,
     attributes: Array.isArray(ball.attributes) ? [...ball.attributes] : [],
     piercing: Boolean(ball.piercing),
@@ -996,6 +1003,10 @@ function createUnitInstance(ball, uid) {
     atkDebuffTurns: 0,
     atkMultiplier: 1,
     missDebuffTurns: 0,
+    burnTurns: 0,
+    iceTurns: 0,
+    stunTurns: 0,
+    oneShotPerfectCount: 0,
     dead: false,
   };
 }
@@ -1162,16 +1173,15 @@ function initBattleState() {
 function createBattleUnitElement(unit, isEnemy, isFrontTank, isFrontAttacker) {
   const wrapper = document.createElement('div');
   wrapper.dataset.uid = unit.uid;
-  const isParryReady = unit.ballId === 'sword_ball' && unit.parryCounter % 4 === 3;
+  const statusFx = getPersistentStatusClasses(unit);
+  const isParryReady = statusFx.isParryReady;
   wrapper.className = [
     'battle-unit',
     isEnemy ? 'battle-unit-enemy' : 'battle-unit-player',
     unit.dead ? 'battle-unit-dead' : '',
     unit.isWall ? 'battle-unit-wall' : '',
     !unit.dead && (isFrontTank || isFrontAttacker) ? 'battle-unit-active' : '',
-    unit.isHardened ? 'battle-unit-hardened' : '',
-    !unit.dead && unit.laserCharged ? 'battle-unit-laser-charged' : '',
-    !unit.dead && isParryReady ? 'battle-unit-parry-ready' : '',
+    ...statusFx.classes,
   ]
     .filter(Boolean)
     .join(' ');
@@ -1220,9 +1230,7 @@ function createBattleUnitElement(unit, isEnemy, isFrontTank, isFrontAttacker) {
       }
     }
     if (unit.ballId === 'one_shot_ball' && (unit.oneShotPerfectCount || 0) > 0) {
-      chips.push(
-        `<span class="battle-unit-status-chip battle-chip-oneshot">攻×1.1 ×${unit.oneShotPerfectCount}</span>`
-      );
+      chips.push('<span class="battle-unit-status-chip battle-chip-oneshot">攻×1.1</span>');
     }
     if (unit.ballId === 'magician_ball') {
       const charge = unit.attacksMade % 5;
@@ -1256,6 +1264,45 @@ function createBattleUnitElement(unit, isEnemy, isFrontTank, isFrontAttacker) {
     }
   }
 
+  const persistentOverlays = [];
+  if (statusFx.hasBurn) {
+    persistentOverlays.push(`
+      <div class="battle-fx-overlay battle-fx-flame-aura" aria-hidden="true">
+        <svg viewBox="0 0 72 72" width="100%" height="100%">
+          <path d="M12 58 C6 42 15 30 20 20 C20 30 26 32 28 24 C32 34 38 20 39 10 C47 22 50 30 55 24 C62 36 64 52 54 62 C44 68 22 68 12 58 Z" fill="rgba(249, 115, 22, 0.55)" stroke="#EA580C" stroke-width="2" stroke-linejoin="round" />
+          <path d="M19 58 C17 47 23 39 27 33 C29 41 34 40 37 29 C42 38 47 41 49 54 C46 63 26 64 19 58 Z" fill="rgba(253, 224, 71, 0.72)" />
+          <circle cx="15" cy="18" r="2.5" fill="#FDE047" />
+          <circle cx="57" cy="15" r="2.2" fill="#FB923C" />
+        </svg>
+      </div>
+    `);
+  }
+  if (statusFx.hasIce) {
+    persistentOverlays.push(`
+      <div class="battle-fx-overlay battle-fx-ice-shell" aria-hidden="true">
+        <svg viewBox="0 0 72 72" width="100%" height="100%">
+          <polygon points="10,48 6,24 22,10 50,10 66,24 62,48 48,64 24,64" fill="rgba(56, 189, 248, 0.24)" stroke="#38BDF8" stroke-width="2.5" stroke-linejoin="round" />
+          <polygon points="18,14 26,6 32,16" fill="#BAE6FD" stroke="#0284C7" stroke-width="1.5" />
+          <polygon points="48,12 58,8 55,20" fill="#BAE6FD" stroke="#0284C7" stroke-width="1.5" />
+          <line x1="18" y1="24" x2="29" y2="35" stroke="#E0F2FE" stroke-width="2" stroke-linecap="round" />
+          <line x1="54" y1="42" x2="43" y2="52" stroke="#E0F2FE" stroke-width="2" stroke-linecap="round" />
+        </svg>
+      </div>
+    `);
+  }
+  if (statusFx.hasStun) {
+    persistentOverlays.push(`
+      <div class="battle-fx-overlay battle-fx-stun-halo" aria-hidden="true">
+        <svg viewBox="0 0 72 28" width="100%" height="100%">
+          <ellipse cx="36" cy="16" rx="26" ry="7" fill="none" stroke="#FACC15" stroke-width="2.5" stroke-dasharray="6 4" />
+          <polygon points="13,12 16,6 19,12 24,14 19,16 16,22 13,16 8,14" fill="#FEF08A" stroke="#000000" stroke-width="1.2" />
+          <polygon points="56,9 59,4 61,9 66,11 61,13 59,18 56,13 51,11" fill="#FACC15" stroke="#000000" stroke-width="1.2" />
+          <polygon points="36,2 39,9 34,9 37,16 32,9 37,9" fill="#FEF08A" />
+        </svg>
+      </div>
+    `);
+  }
+
   const effectiveAtk = roundStat(unit.atk * (unit.atkDebuffTurns > 0 ? unit.atkMultiplier : 1));
 
   wrapper.innerHTML = `
@@ -1263,6 +1310,7 @@ function createBattleUnitElement(unit, isEnemy, isFrontTank, isFrontAttacker) {
     ${chips.length > 0 ? `<div class="battle-unit-status-row">${chips.join('')}</div>` : ''}
     <div class="battle-unit-sprite-wrap" role="img" aria-label="${unit.name}">
       ${unit.svg}
+      ${persistentOverlays.join('')}
     </div>
     <div class="battle-stat-plate">
       <div class="battle-hp-bar-track" aria-hidden="true">
@@ -1414,16 +1462,287 @@ function renderBattleTyping() {
   }
 }
 
-function spawnProjectileFx(fromPlayer) {
-  const orb = document.createElement('div');
-  orb.className = `battle-projectile ${fromPlayer ? 'battle-projectile-player' : 'battle-projectile-enemy'}`;
-  battleFxLayer.appendChild(orb);
-  setTimeout(() => {
-    orb.remove();
-  }, Math.max(80, Math.round(280 / getBattleSpeed())));
+function getUnitSpriteCenterInFxLayer(uid) {
+  if (!battleFxLayer || !battleScreenEl || !uid) return null;
+  const target =
+    battleScreenEl.querySelector(`.battle-unit[data-uid="${uid}"] .battle-unit-sprite-wrap`) ||
+    battleScreenEl.querySelector(`.battle-unit[data-uid="${uid}"]`);
+  if (!target) return null;
+  const layerRect = battleFxLayer.getBoundingClientRect();
+  const targetRect = target.getBoundingClientRect();
+  if (layerRect.width <= 0 || targetRect.width <= 0) return null;
+  return {
+    x: targetRect.left - layerRect.left + targetRect.width / 2,
+    y: targetRect.top - layerRect.top + targetRect.height / 2,
+  };
 }
 
-function showUnitImpactAndPopup(uid, label, popupType, showBurst) {
+function spawnProjectileFx(fromPlayer, variant = 'normal', fromUid = null, toUid = null) {
+  if (!battleFxLayer) return;
+  const fromPos = fromUid ? getUnitSpriteCenterInFxLayer(fromUid) : null;
+  const toPos = toUid ? getUnitSpriteCenterInFxLayer(toUid) : null;
+
+  if (!fromPos || !toPos) {
+    const orb = document.createElement('div');
+    orb.className = `battle-projectile ${fromPlayer ? 'battle-projectile-player' : 'battle-projectile-enemy'}`;
+    battleFxLayer.appendChild(orb);
+    setTimeout(() => {
+      orb.remove();
+    }, Math.max(80, Math.round(280 / getBattleSpeed())));
+    return;
+  }
+
+  const dx = toPos.x - fromPos.x;
+  const dy = toPos.y - fromPos.y;
+  const angleDeg = (Math.atan2(dy, dx) * 180) / Math.PI;
+
+  const proj = document.createElement('div');
+  proj.className = `battle-projectile-targeted battle-projectile-${variant}`;
+  proj.style.setProperty('--fx-start-x', `${fromPos.x}px`);
+  proj.style.setProperty('--fx-start-y', `${fromPos.y}px`);
+  proj.style.setProperty('--fx-dx', `${dx}px`);
+  proj.style.setProperty('--fx-dy', `${dy}px`);
+  proj.style.setProperty('--fx-angle', `${angleDeg}deg`);
+
+  if (variant === 'fire') {
+    proj.innerHTML = `
+      <svg viewBox="0 0 40 40" width="100%" height="100%" aria-hidden="true">
+        <path d="M4 20 C12 8 22 6 35 20 C22 34 12 32 4 20 Z" fill="#EA580C" stroke="#000000" stroke-width="2.5" />
+        <circle cx="25" cy="20" r="8" fill="#FACC15" />
+        <circle cx="27" cy="20" r="4" fill="#FFFFFF" />
+      </svg>
+    `;
+  } else if (variant === 'ice') {
+    proj.innerHTML = `
+      <svg viewBox="0 0 44 28" width="100%" height="100%" aria-hidden="true">
+        <polygon points="2,14 18,4 42,14 18,24" fill="#38BDF8" stroke="#082F49" stroke-width="2.5" stroke-linejoin="round" />
+        <polygon points="10,14 20,9 36,14 20,19" fill="#E0F2FE" />
+      </svg>
+    `;
+  } else if (variant === 'parry') {
+    proj.innerHTML = `
+      <svg viewBox="0 0 38 38" width="100%" height="100%" aria-hidden="true">
+        <path d="M12 4 C28 10 34 20 12 34 C22 24 22 14 12 4 Z" fill="#FDE047" stroke="#000000" stroke-width="2.5" stroke-linejoin="round" />
+        <path d="M16 9 C26 14 28 22 16 29" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" />
+      </svg>
+    `;
+  } else {
+    const fill = fromPlayer ? '#F6C116' : '#EF4444';
+    proj.innerHTML = `
+      <svg viewBox="0 0 30 30" width="100%" height="100%" aria-hidden="true">
+        <circle cx="15" cy="15" r="11" fill="${fill}" stroke="#000000" stroke-width="3" />
+        <circle cx="18" cy="12" r="3.5" fill="#FFFFFF" />
+      </svg>
+    `;
+  }
+
+  battleFxLayer.appendChild(proj);
+  setTimeout(() => {
+    proj.remove();
+  }, Math.max(90, Math.round(270 / getBattleSpeed())));
+}
+
+function spawnLaserBeamFx(fromUid, toUid, beamVariant = 'blue') {
+  if (!battleFxLayer) return;
+  const fromPos = getUnitSpriteCenterInFxLayer(fromUid);
+  const toPos = getUnitSpriteCenterInFxLayer(toUid);
+  if (!fromPos || !toPos) return;
+
+  const dx = toPos.x - fromPos.x;
+  const dy = toPos.y - fromPos.y;
+  const dist = Math.max(40, Math.hypot(dx, dy));
+  const angleDeg = (Math.atan2(dy, dx) * 180) / Math.PI;
+
+  const muzzle = document.createElement('div');
+  muzzle.className = 'battle-laser-muzzle';
+  muzzle.style.setProperty('--fx-start-x', `${fromPos.x}px`);
+  muzzle.style.setProperty('--fx-start-y', `${fromPos.y}px`);
+  const muzzleOuter = beamVariant === 'red' ? '#EF4444' : '#22D3EE';
+  const muzzleInner = beamVariant === 'red' ? '#FEF08A' : '#FFFFFF';
+  muzzle.innerHTML = `
+    <svg viewBox="0 0 56 56" width="100%" height="100%" aria-hidden="true">
+      <polygon points="28,2 34,20 54,18 38,30 50,48 31,37 22,54 21,35 2,33 19,23" fill="${muzzleOuter}" stroke="#000000" stroke-width="2.5" />
+      <circle cx="28" cy="28" r="10" fill="${muzzleInner}" />
+    </svg>
+  `;
+
+  const beam = document.createElement('div');
+  beam.className = `battle-laser-beam battle-laser-beam-${beamVariant}`;
+  beam.style.setProperty('--fx-start-x', `${fromPos.x}px`);
+  beam.style.setProperty('--fx-start-y', `${fromPos.y}px`);
+  beam.style.setProperty('--fx-dist', `${dist}px`);
+  beam.style.setProperty('--fx-angle', `${angleDeg}deg`);
+  beam.innerHTML = '<div class="battle-laser-beam-core"></div>';
+
+  battleFxLayer.appendChild(beam);
+  battleFxLayer.appendChild(muzzle);
+
+  const ttl = Math.max(120, Math.round(370 / getBattleSpeed()));
+  setTimeout(() => {
+    beam.remove();
+    muzzle.remove();
+  }, ttl);
+}
+
+function spawnThunderBoltFx(targetUid) {
+  if (!battleFxLayer) return;
+  const targetPos = getUnitSpriteCenterInFxLayer(targetUid);
+  if (!targetPos) return;
+
+  const bolt = document.createElement('div');
+  bolt.className = 'battle-thunder-bolt';
+  bolt.style.setProperty('--fx-target-x', `${targetPos.x}px`);
+  bolt.style.setProperty('--fx-target-y', `${targetPos.y}px`);
+  bolt.innerHTML = `
+    <svg viewBox="0 0 64 180" preserveAspectRatio="none" width="100%" height="100%" aria-hidden="true">
+      <polygon points="38,0 14,76 32,76 16,136 28,136 24,180 54,114 35,114 52,58 34,58" fill="#FACC15" stroke="#000000" stroke-width="3" stroke-linejoin="round" />
+      <polygon points="36,12 21,72 35,72 23,130 33,130 29,166 47,118 33,118 46,62 32,62" fill="#FFFFFF" />
+    </svg>
+  `;
+  battleFxLayer.appendChild(bolt);
+  setTimeout(() => {
+    bolt.remove();
+  }, Math.max(130, Math.round(390 / getBattleSpeed())));
+}
+
+function spawnHealWaveFx(fromUid, toUid) {
+  if (!battleFxLayer) return;
+  const fromPos = getUnitSpriteCenterInFxLayer(fromUid);
+  const toPos = getUnitSpriteCenterInFxLayer(toUid);
+  if (!fromPos || !toPos) return;
+
+  const wave = document.createElement('div');
+  wave.className = 'battle-heal-wave';
+  wave.style.setProperty('--fx-start-x', `${fromPos.x}px`);
+  wave.style.setProperty('--fx-start-y', `${fromPos.y}px`);
+  wave.style.setProperty('--fx-dx', `${toPos.x - fromPos.x}px`);
+  wave.style.setProperty('--fx-dy', `${toPos.y - fromPos.y}px`);
+  wave.innerHTML = `
+    <svg viewBox="0 0 28 28" width="100%" height="100%" aria-hidden="true">
+      <circle cx="14" cy="14" r="11" fill="#4ADE80" stroke="#000000" stroke-width="2.5" />
+      <path d="M14 7 V21 M7 14 H21" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" />
+    </svg>
+  `;
+  battleFxLayer.appendChild(wave);
+  setTimeout(() => {
+    wave.remove();
+  }, Math.max(110, Math.round(350 / getBattleSpeed())));
+}
+
+function spawnUnitFxOverlay(uid, overlayKind, variant = '') {
+  if (!battleScreenEl || !uid) return;
+  const unitEl = battleScreenEl.querySelector(`.battle-unit[data-uid="${uid}"]`);
+  if (!unitEl) return;
+  const spriteWrap = unitEl.querySelector('.battle-unit-sprite-wrap') || unitEl;
+
+  const overlay = document.createElement('div');
+  let durationMs = 420;
+
+  if (overlayKind === 'magic-circle') {
+    const spellColor =
+      variant === 'ice' ? '#38BDF8' : variant === 'thunder' ? '#FACC15' : '#F97316';
+    const spellCore =
+      variant === 'ice' ? '#E0F2FE' : variant === 'thunder' ? '#FEF9C3' : '#FDE047';
+    overlay.className = `battle-fx-overlay battle-fx-magic-circle battle-fx-magic-circle-${variant || 'fire'}`;
+    overlay.innerHTML = `
+      <svg viewBox="0 0 88 88" width="100%" height="100%" aria-hidden="true">
+        <circle cx="44" cy="44" r="38" fill="none" stroke="${spellColor}" stroke-width="3.5" stroke-dasharray="10 5" />
+        <circle cx="44" cy="44" r="28" fill="none" stroke="${spellCore}" stroke-width="2.5" />
+        <polygon points="44,8 55,66 13,30 75,30 33,66" fill="none" stroke="${spellColor}" stroke-width="2.5" stroke-linejoin="round" />
+        <circle cx="44" cy="44" r="7" fill="${spellCore}" />
+      </svg>
+    `;
+    durationMs = 460;
+  } else if (overlayKind === 'parry-slash') {
+    overlay.className = 'battle-fx-overlay battle-fx-parry-slash';
+    overlay.innerHTML = `
+      <svg viewBox="0 0 84 84" width="100%" height="100%" aria-hidden="true">
+        <circle cx="42" cy="42" r="30" fill="rgba(253, 224, 71, 0.25)" stroke="#FACC15" stroke-width="3.5" />
+        <path d="M14 14 L70 70 M70 14 L14 70" stroke="#000000" stroke-width="8" stroke-linecap="round" />
+        <path d="M14 14 L70 70 M70 14 L14 70" stroke="#FEF08A" stroke-width="4.5" stroke-linecap="round" />
+        <polygon points="42,4 47,20 42,26 37,20" fill="#FFFFFF" />
+      </svg>
+    `;
+    unitEl.classList.remove('battle-unit-parry-clang');
+    void unitEl.offsetWidth;
+    unitEl.classList.add('battle-unit-parry-clang');
+    durationMs = 380;
+  } else if (overlayKind === 'parry-pierce') {
+    overlay.className = 'battle-fx-overlay battle-fx-parry-pierce';
+    overlay.innerHTML = `
+      <svg viewBox="0 0 80 80" width="100%" height="100%" aria-hidden="true">
+        <path d="M20 14 L60 14 L60 44 C60 58 40 68 40 68 C40 68 20 58 20 44 Z" fill="rgba(14, 165, 233, 0.25)" stroke="#38BDF8" stroke-width="3" />
+        <path d="M40 12 L34 34 L46 42 L36 68" fill="none" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+    `;
+    durationMs = 360;
+  } else if (overlayKind === 'heal') {
+    overlay.className = 'battle-fx-overlay battle-fx-heal-aura';
+    overlay.innerHTML = `
+      <svg viewBox="0 0 84 84" width="100%" height="100%" aria-hidden="true">
+        <circle cx="42" cy="46" r="30" fill="rgba(74, 222, 128, 0.34)" stroke="#15803D" stroke-width="3.5" />
+        <path d="M20 20 V32 M14 26 H26" stroke="#000000" stroke-width="7" stroke-linecap="round" />
+        <path d="M20 20 V32 M14 26 H26" stroke="#4ADE80" stroke-width="4" stroke-linecap="round" />
+        <path d="M64 16 V28 M58 22 H70" stroke="#000000" stroke-width="7" stroke-linecap="round" />
+        <path d="M64 16 V28 M58 22 H70" stroke="#4ADE80" stroke-width="4" stroke-linecap="round" />
+        <path d="M42 5 V19 M35 12 H49" stroke="#000000" stroke-width="7.5" stroke-linecap="round" />
+        <path d="M42 5 V19 M35 12 H49" stroke="#FFFFFF" stroke-width="4.5" stroke-linecap="round" />
+      </svg>
+    `;
+    unitEl.classList.remove('battle-unit-healing');
+    void unitEl.offsetWidth;
+    unitEl.classList.add('battle-unit-healing');
+    durationMs = 540;
+  } else if (overlayKind === 'charge-flare') {
+    const ringColor = variant === 'red' ? '#EF4444' : '#22D3EE';
+    const coreColor = variant === 'red' ? '#FEF08A' : '#E0F2FE';
+    overlay.className = 'battle-fx-overlay battle-fx-charge-flare';
+    overlay.innerHTML = `
+      <svg viewBox="0 0 84 84" width="100%" height="100%" aria-hidden="true">
+        <circle cx="42" cy="42" r="34" fill="none" stroke="${ringColor}" stroke-width="4" stroke-dasharray="14 6" />
+        <circle cx="42" cy="42" r="20" fill="none" stroke="${coreColor}" stroke-width="3" />
+      </svg>
+    `;
+    durationMs = 440;
+  } else if (overlayKind === 'burn-burst') {
+    overlay.className = 'battle-fx-overlay battle-fx-status-burst';
+    overlay.innerHTML = `
+      <svg viewBox="0 0 80 80" width="100%" height="100%" aria-hidden="true">
+        <path d="M14 58 C8 40 18 24 28 14 C30 26 38 24 42 8 C54 22 66 36 60 58 C48 68 24 68 14 58 Z" fill="rgba(249, 115, 22, 0.72)" stroke="#000000" stroke-width="2.5" />
+        <path d="M25 56 C23 44 30 34 38 26 C42 36 52 40 50 56 C44 62 31 62 25 56 Z" fill="#FDE047" />
+      </svg>
+    `;
+    durationMs = 400;
+  } else if (overlayKind === 'ice-burst' || overlayKind === 'ice-freeze') {
+    overlay.className = 'battle-fx-overlay battle-fx-status-burst';
+    overlay.innerHTML = `
+      <svg viewBox="0 0 80 80" width="100%" height="100%" aria-hidden="true">
+        <polygon points="12,50 8,24 28,10 52,10 72,24 68,50 48,68 32,68" fill="rgba(56, 189, 248, 0.52)" stroke="#0284C7" stroke-width="3" />
+        <path d="M40 12 V68 M14 28 L66 52 M66 28 L14 52" stroke="#E0F2FE" stroke-width="3" stroke-linecap="round" />
+      </svg>
+    `;
+    durationMs = 400;
+  } else if (overlayKind === 'thunder-burst') {
+    overlay.className = 'battle-fx-overlay battle-fx-status-burst';
+    overlay.innerHTML = `
+      <svg viewBox="0 0 80 80" width="100%" height="100%" aria-hidden="true">
+        <circle cx="40" cy="40" r="30" fill="rgba(250, 204, 21, 0.25)" stroke="#FACC15" stroke-width="3.5" stroke-dasharray="8 6" />
+        <polygon points="44,10 24,42 39,42 33,70 56,36 41,36" fill="#FDE047" stroke="#000000" stroke-width="2.5" stroke-linejoin="round" />
+      </svg>
+    `;
+    durationMs = 400;
+  } else {
+    return;
+  }
+
+  spriteWrap.appendChild(overlay);
+  setTimeout(() => {
+    overlay.remove();
+    unitEl.classList.remove('battle-unit-parry-clang', 'battle-unit-healing');
+  }, Math.max(120, Math.round(durationMs / getBattleSpeed())));
+}
+
+function showUnitImpactAndPopup(uid, label, popupType, showBurst, burstVariant = 'normal') {
   const unitEl = battleScreenEl.querySelector(`.battle-unit[data-uid="${uid}"]`);
   if (!unitEl) return;
 
@@ -1432,12 +1751,13 @@ function showUnitImpactAndPopup(uid, label, popupType, showBurst) {
     void unitEl.offsetWidth;
     unitEl.classList.add('battle-unit-hit');
 
+    const burstSpec = getBurstColorSpec(burstVariant);
     const burst = document.createElement('div');
-    burst.className = 'battle-impact-burst';
+    burst.className = `battle-impact-burst ${burstSpec.burstClass}`.trim();
     burst.innerHTML = `
       <svg viewBox="0 0 64 64" width="100%" height="100%" aria-hidden="true">
-        <polygon points="32,2 40,22 62,18 46,34 58,54 36,44 24,62 22,40 2,36 20,24" fill="#FACC15" stroke="#000000" stroke-width="3.5" stroke-linejoin="round" />
-        <polygon points="32,14 37,26 50,24 41,34 48,46 35,40 28,50 27,37 14,35 25,27" fill="#FFFFFF" />
+        <polygon points="32,2 40,22 62,18 46,34 58,54 36,44 24,62 22,40 2,36 20,24" fill="${burstSpec.outerFill}" stroke="#000000" stroke-width="3.5" stroke-linejoin="round" />
+        <polygon points="32,14 37,26 50,24 41,34 48,46 35,40 28,50 27,37 14,35 25,27" fill="${burstSpec.innerFill}" />
       </svg>
     `;
     unitEl.appendChild(burst);
@@ -1567,6 +1887,7 @@ async function handleUnitDefeat(unit, opposingTeam, ownTeam, sessionId) {
     unit.hp = roundStat(unit.maxHp / 2);
     renderBattleUnits();
     playHealSound(profile.volume);
+    spawnUnitFxOverlay(unit.uid, 'heal');
     showUnitImpactAndPopup(unit.uid, `復活! HP ${formatStat(unit.hp)}`, 'battle-float-heal', false);
     return;
   }
@@ -1660,14 +1981,16 @@ async function handleUnitDefeat(unit, opposingTeam, ownTeam, sessionId) {
         playAttackHitSound(profile.volume, true);
       }
       renderBattleUnits();
-      showUnitImpactAndPopup(unit.uid, '大爆発!', 'battle-float-boom', true);
+      showUnitImpactAndPopup(unit.uid, '大爆発!', 'battle-float-boom', true, 'fire');
       showUnitImpactAndPopup(
         blastTarget.uid,
         `-${formatStat(boomDmg)} (爆発!)`,
         'battle-float-boom',
-        true
+        true,
+        'fire'
       );
       if (parryCheck.bypassedByPierce && !blastTarget.dead) {
+        spawnUnitFxOverlay(blastTarget.uid, 'parry-pierce');
         showUnitImpactAndPopup(blastTarget.uid, 'パリィ無効!', 'battle-float-miss', false);
       }
 
@@ -1703,6 +2026,7 @@ async function runBenchBandageHealing(team, activeFrontUnit, sessionId) {
 
     renderBattleUnits();
     playHealSound(profile.volume);
+    spawnUnitFxOverlay(bandageUnit.uid, 'heal');
     showUnitImpactAndPopup(
       bandageUnit.uid,
       anyHealed ? '味方15%回復!' : '支援回復 (満タン)',
@@ -1710,9 +2034,11 @@ async function runBenchBandageHealing(team, activeFrontUnit, sessionId) {
       false
     );
     healedPopups.forEach((p) => {
+      spawnHealWaveFx(bandageUnit.uid, p.uid);
+      spawnUnitFxOverlay(p.uid, 'heal');
       showUnitImpactAndPopup(p.uid, p.label, 'battle-float-heal', false);
     });
-    await battleDelay(240);
+    await battleDelay(260);
     if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
   }
 }
@@ -1746,6 +2072,7 @@ async function executeUnitTurn(attacker, ownTeam, defenderTeam, isPlayerAttacker
   // Start-of-turn Burn / Ice / Stun status ticks (Magician Ball)
   if ((attacker.burnTurns || 0) > 0 || (attacker.iceTurns || 0) > 0 || (attacker.stunTurns || 0) > 0) {
     const statusOutcome = processStartOfTurnStatuses(attacker);
+    const statusFxList = getStartOfTurnStatusFxList(statusOutcome);
     if (statusOutcome.burnDamage > 0 || statusOutcome.iceDamage > 0) {
       renderBattleUnits();
       if (statusOutcome.died) {
@@ -1753,12 +2080,18 @@ async function executeUnitTurn(attacker, ownTeam, defenderTeam, isPlayerAttacker
       } else {
         playAttackHitSound(profile.volume, false);
       }
+      statusFxList
+        .filter((fx) => fx.kind === 'burn_tick' || fx.kind === 'ice_tick')
+        .forEach((fx) => {
+          spawnUnitFxOverlay(attacker.uid, fx.overlayKind);
+        });
       if (statusOutcome.burnDamage > 0) {
         showUnitImpactAndPopup(
           attacker.uid,
           `-${formatStat(statusOutcome.burnDamage)} (火傷!)`,
           'battle-float-fire',
-          true
+          true,
+          'fire'
         );
       }
       if (statusOutcome.iceDamage > 0) {
@@ -1766,10 +2099,11 @@ async function executeUnitTurn(attacker, ownTeam, defenderTeam, isPlayerAttacker
           attacker.uid,
           `-${formatStat(statusOutcome.iceDamage)} (氷!)`,
           'battle-float-ice',
-          true
+          true,
+          'ice'
         );
       }
-      await battleDelay(300);
+      await battleDelay(320);
       if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
       if (statusOutcome.died) {
         await handleUnitDefeat(attacker, defenderTeam, ownTeam, sessionId);
@@ -1779,13 +2113,20 @@ async function executeUnitTurn(attacker, ownTeam, defenderTeam, isPlayerAttacker
     if (statusOutcome.incapacitated) {
       renderBattleUnits();
       playErrorSound(profile.volume);
+      if (statusOutcome.stunned) {
+        spawnThunderBoltFx(attacker.uid);
+        spawnUnitFxOverlay(attacker.uid, 'thunder-burst');
+      } else {
+        spawnUnitFxOverlay(attacker.uid, 'ice-freeze');
+      }
       showUnitImpactAndPopup(
         attacker.uid,
         statusOutcome.stunned ? 'スタン! 行動不能' : '凍結! 行動不能',
         statusOutcome.stunned ? 'battle-float-thunder' : 'battle-float-ice',
-        false
+        true,
+        statusOutcome.stunned ? 'thunder' : 'ice'
       );
-      await battleDelay(320);
+      await battleDelay(340);
       return;
     }
   }
@@ -1807,8 +2148,9 @@ async function executeUnitTurn(attacker, ownTeam, defenderTeam, isPlayerAttacker
     attacker.laserCharged = true;
     renderBattleUnits();
     playOpenSound(profile.volume);
+    spawnUnitFxOverlay(attacker.uid, 'charge-flare', 'blue');
     showUnitImpactAndPopup(attacker.uid, 'レーザーチャージ!', 'battle-float-laser', false);
-    await battleDelay(320);
+    await battleDelay(340);
     if (doesFrontAbilitySkipAttack(attacker.ballId, attacker.turnCounter)) return;
   }
 
@@ -1820,13 +2162,14 @@ async function executeUnitTurn(attacker, ownTeam, defenderTeam, isPlayerAttacker
     const cycleStep = attacker.turnCounter % 3;
     renderBattleUnits();
     playOpenSound(profile.volume);
+    spawnUnitFxOverlay(attacker.uid, 'charge-flare', 'red');
     showUnitImpactAndPopup(
       attacker.uid,
       `赤レーザー充填中 (${cycleStep}/3)`,
       'battle-float-red-laser',
       false
     );
-    await battleDelay(320);
+    await battleDelay(340);
     return;
   }
 
@@ -1836,13 +2179,14 @@ async function executeUnitTurn(attacker, ownTeam, defenderTeam, isPlayerAttacker
     const actualSelfHeal = applyHealToUnit(attacker, selfHeal);
     renderBattleUnits();
     playHealSound(profile.volume);
+    spawnUnitFxOverlay(attacker.uid, 'heal');
     showUnitImpactAndPopup(
       attacker.uid,
       actualSelfHeal > 0 ? `+${formatStat(actualSelfHeal)} (回復!)` : '自己回復 (満タン)',
       'battle-float-heal',
       false
     );
-    await battleDelay(340);
+    await battleDelay(360);
     if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
   }
 
@@ -1856,6 +2200,7 @@ async function executeUnitTurn(attacker, ownTeam, defenderTeam, isPlayerAttacker
         ownTeam.splice(unitIdx >= 0 ? unitIdx + 1 : ownTeam.length, 0, flowerUnit);
         renderBattleUnits();
         playHealSound(profile.volume);
+        spawnUnitFxOverlay(flowerUnit.uid, 'heal');
         showUnitImpactAndPopup(attacker.uid, '立派な花に成長!', 'battle-float-heal', false);
         showUnitImpactAndPopup(flowerUnit.uid, '花 +1体! (HP10/攻1)', 'battle-float-heal', false);
         await battleDelay(340);
@@ -1906,6 +2251,7 @@ async function executeUnitTurn(attacker, ownTeam, defenderTeam, isPlayerAttacker
       : pickRandomMagicianSpell();
     if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
     chosenSpell = MAGICIAN_SPELLS[spellKey || 'fire'] || MAGICIAN_SPELLS.fire;
+    spawnUnitFxOverlay(attacker.uid, 'magic-circle', chosenSpell.id);
     if (!isPlayerAttacker) {
       const spellPopupCls =
         chosenSpell.id === 'fire'
@@ -1914,9 +2260,9 @@ async function executeUnitTurn(attacker, ownTeam, defenderTeam, isPlayerAttacker
             ? 'battle-float-ice'
             : 'battle-float-thunder';
       showUnitImpactAndPopup(attacker.uid, `魔法: ${chosenSpell.label}!`, spellPopupCls, false);
-      await battleDelay(240);
-      if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
     }
+    await battleDelay(isPlayerAttacker ? 190 : 250);
+    if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
   }
 
   attacker.attacksMade += 1;
@@ -1958,9 +2304,21 @@ async function executeUnitTurn(attacker, ownTeam, defenderTeam, isPlayerAttacker
   }
   dmg = roundStat(dmg);
 
+  const fxSpec = getAttackFxSpec({
+    ballId: attacker.ballId,
+    isLaserShot,
+    isRedLaserShot,
+    chosenSpell,
+    isSuperJump,
+  });
+
   const attackerEl = battleScreenEl.querySelector(`.battle-unit[data-uid="${attacker.uid}"]`);
   if (attackerEl) {
-    if (isSuperJump) {
+    if (fxSpec.kind === 'laser_beam') {
+      attackerEl.classList.add(
+        isPlayerAttacker ? 'battle-unit-laser-recoil-left' : 'battle-unit-laser-recoil-right'
+      );
+    } else if (isSuperJump) {
       attackerEl.classList.add(
         isPlayerAttacker ? 'battle-unit-super-jump-left' : 'battle-unit-super-jump-right'
       );
@@ -1970,9 +2328,16 @@ async function executeUnitTurn(attacker, ownTeam, defenderTeam, isPlayerAttacker
       );
     }
   }
-  spawnProjectileFx(isPlayerAttacker);
 
-  await battleDelay(isSuperJump ? 260 : 210);
+  if (fxSpec.kind === 'laser_beam') {
+    spawnLaserBeamFx(attacker.uid, defender.uid, fxSpec.beamVariant);
+  } else if (fxSpec.useThunderBolt) {
+    spawnThunderBoltFx(defender.uid);
+  } else {
+    spawnProjectileFx(isPlayerAttacker, fxSpec.projectileVariant || 'normal', attacker.uid, defender.uid);
+  }
+
+  await battleDelay(fxSpec.castDelayMs);
   if (!battleState || battleState.sessionId !== sessionId || currentScreen !== 'battle') return;
 
   // Sword Ball 4th-incoming-attack Parry check (invalid against piercing or non-physical attacks like Laser / Magician spells)
@@ -1993,12 +2358,15 @@ async function executeUnitTurn(attacker, ownTeam, defenderTeam, isPlayerAttacker
       playOpenSound(profile.volume);
     }
     renderBattleUnits();
+    spawnUnitFxOverlay(defender.uid, 'parry-slash');
+    spawnProjectileFx(!isPlayerAttacker, 'parry', defender.uid, attacker.uid);
     showUnitImpactAndPopup(defender.uid, 'パリィ!', 'battle-float-parry', false);
     showUnitImpactAndPopup(
       attacker.uid,
       `-${formatStat(reflectedDmg)} (パリィ返し!)`,
       'battle-float-dmg',
-      true
+      true,
+      'parry'
     );
     if (attacker.dead) {
       await handleUnitDefeat(attacker, defenderTeam, ownTeam, sessionId);
@@ -2038,6 +2406,12 @@ async function executeUnitTurn(attacker, ownTeam, defenderTeam, isPlayerAttacker
 
   renderBattleUnits();
 
+  if (chosenSpell && !defender.dead) {
+    if (chosenSpell.id === 'fire') spawnUnitFxOverlay(defender.uid, 'burn-burst');
+    else if (chosenSpell.id === 'ice') spawnUnitFxOverlay(defender.uid, 'ice-burst');
+    else if (chosenSpell.id === 'thunder') spawnUnitFxOverlay(defender.uid, 'thunder-burst');
+  }
+
   let dmgLabel = `-${formatStat(dmg)}`;
   if (isLaserShot) dmgLabel += ' (レーザー2.5倍!)';
   else if (isRedLaserShot) dmgLabel += ' (赤レーザー!)';
@@ -2060,9 +2434,10 @@ async function executeUnitTurn(attacker, ownTeam, defenderTeam, isPlayerAttacker
           ? 'battle-float-crit'
           : 'battle-float-dmg';
 
-  showUnitImpactAndPopup(defender.uid, dmgLabel, dmgPopupClass, true);
+  showUnitImpactAndPopup(defender.uid, dmgLabel, dmgPopupClass, true, fxSpec.burstVariant);
 
   if (parryResult.bypassedByPierce) {
+    spawnUnitFxOverlay(defender.uid, 'parry-pierce');
     showUnitImpactAndPopup(defender.uid, '貫通! パリィ無効', 'battle-float-laser', false);
   } else if (!defender.dead && chosenSpell) {
     if (chosenSpell.id === 'fire') {
@@ -2234,11 +2609,15 @@ function handleTypingChar(rawChar) {
         const oneShotRes = applyOneShotPerfect(frontPlayer);
         if (oneShotRes.triggered) {
           renderBattleUnits();
+          if (oneShotRes.healed > 0) {
+            spawnUnitFxOverlay(frontPlayer.uid, 'heal');
+          }
+          const boostLabel = oneShotRes.atkBoostApplied ? '攻×1.1!' : '攻×1.1維持';
           showUnitImpactAndPopup(
             frontPlayer.uid,
             oneShotRes.healed > 0
-              ? `+${formatStat(oneShotRes.healed)}HP 攻×1.1!`
-              : '攻×1.1!',
+              ? `+${formatStat(oneShotRes.healed)}HP ${boostLabel}`
+              : boostLabel,
             'battle-float-oneshot',
             false
           );
@@ -2273,7 +2652,12 @@ function handleTypingChar(rawChar) {
     const oneShotPenalty = applyOneShotMistake(frontPlayer);
     if (oneShotPenalty.triggered) {
       renderBattleUnits();
-      showUnitImpactAndPopup(frontPlayer.uid, '-1 (ミス!)', 'battle-float-dmg', true);
+      showUnitImpactAndPopup(
+        frontPlayer.uid,
+        oneShotPenalty.lostAtkBoost ? '-1 (ミス! 攻×1.1消滅)' : '-1 (ミス!)',
+        'battle-float-dmg',
+        true
+      );
       if (oneShotPenalty.died) {
         resolveOneShotMistakeDefeat(frontPlayer, battleState.sessionId);
         return;

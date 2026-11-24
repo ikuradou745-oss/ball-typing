@@ -107,6 +107,18 @@
     "lastSeenAtMs": 1795486195886,
     "existsInFirestore": true
   },
+  "8154f8c0349ede8a10d7e1bb": {
+    "visitorId": "8154f8c0349ede8a10d7e1bb",
+    "username": "プレイヤー1",
+    "isAdminVerified": false,
+    "dayKey": "2026-11-24",
+    "isOnline": true,
+    "lastLoginAt": "2026-11-24T13:17:03.729Z",
+    "lastLoginAtMs": 1795526223729,
+    "lastSeenAt": "2026-11-24T13:17:03.729Z",
+    "lastSeenAtMs": 1795526223729,
+    "existsInFirestore": true
+  },
   "9bc9f1b86a3e1b497c936669": {
     "visitorId": "9bc9f1b86a3e1b497c936669",
     "username": "プレイヤー1",
@@ -139,8 +151,8 @@
     "isOnline": false,
     "lastLoginAt": "2026-11-23T23:22:07.709Z",
     "lastLoginAtMs": 1795476127709,
-    "lastSeenAt": "2026-11-24T01:20:32.112Z",
-    "lastSeenAtMs": 1795483232112,
+    "lastSeenAt": "2026-11-24T12:47:03.019Z",
+    "lastSeenAtMs": 1795524423019,
     "existsInFirestore": true
   },
   "acf4a2c4422f2ddb93f5f980": {
@@ -153,6 +165,18 @@
     "lastLoginAtMs": 1795224091292,
     "lastSeenAt": "2026-11-21T02:26:50.862Z",
     "lastSeenAtMs": 1795228010862,
+    "existsInFirestore": true
+  },
+  "bbb07eb857dde3e97c79f79b": {
+    "visitorId": "bbb07eb857dde3e97c79f79b",
+    "username": "プレイヤー1",
+    "isAdminVerified": false,
+    "dayKey": "2026-11-24",
+    "isOnline": true,
+    "lastLoginAt": "2026-11-24T13:17:56.022Z",
+    "lastLoginAtMs": 1795526276022,
+    "lastSeenAt": "2026-11-24T13:17:56.022Z",
+    "lastSeenAtMs": 1795526276022,
     "existsInFirestore": true
   },
   "c998a707cfd3844b139c0097": {
@@ -191,6 +215,42 @@
     "lastSeenAtMs": 1795502535929,
     "existsInFirestore": true
   },
+  "deccb9c6547769b34d27e3fc": {
+    "visitorId": "deccb9c6547769b34d27e3fc",
+    "username": "プレイヤー1",
+    "isAdminVerified": false,
+    "dayKey": "2026-11-24",
+    "isOnline": true,
+    "lastLoginAt": "2026-11-24T13:19:29.673Z",
+    "lastLoginAtMs": 1795526369673,
+    "lastSeenAt": "2026-11-24T13:19:29.673Z",
+    "lastSeenAtMs": 1795526369673,
+    "existsInFirestore": true
+  },
+  "df505e8ac923818b8652e5e3": {
+    "visitorId": "df505e8ac923818b8652e5e3",
+    "username": "プレイヤー1",
+    "isAdminVerified": false,
+    "dayKey": "2026-11-24",
+    "isOnline": true,
+    "lastLoginAt": "2026-11-24T12:38:08.636Z",
+    "lastLoginAtMs": 1795523888636,
+    "lastSeenAt": "2026-11-24T12:38:08.636Z",
+    "lastSeenAtMs": 1795523888636,
+    "existsInFirestore": true
+  },
+  "e720a625715ab59546f46613": {
+    "visitorId": "e720a625715ab59546f46613",
+    "username": "プレイヤー1",
+    "isAdminVerified": false,
+    "dayKey": "2026-11-24",
+    "isOnline": true,
+    "lastLoginAt": "2026-11-24T13:21:12.106Z",
+    "lastLoginAtMs": 1795526472106,
+    "lastSeenAt": "2026-11-24T13:21:12.106Z",
+    "lastSeenAtMs": 1795526472106,
+    "existsInFirestore": true
+  },
   "ee38dcbeab58331286ae87a8": {
     "visitorId": "ee38dcbeab58331286ae87a8",
     "username": "プレイヤー1",
@@ -207,12 +267,12 @@
     "visitorId": "fa110b647f74f43ea30ea83e",
     "username": "らもビルダー",
     "isAdminVerified": false,
-    "dayKey": "2026-11-24",
+    "dayKey": "2026-11-25",
     "isOnline": true,
-    "lastLoginAt": "2026-11-24T12:19:44.120Z",
-    "lastLoginAtMs": 1795522784120,
-    "lastSeenAt": "2026-11-24T12:37:13.761Z",
-    "lastSeenAtMs": 1795523833761,
+    "lastLoginAt": "2026-11-24T23:00:59.202Z",
+    "lastLoginAtMs": 1795561259202,
+    "lastSeenAt": "2026-11-24T23:12:19.074Z",
+    "lastSeenAtMs": 1795561939074,
     "existsInFirestore": true
   },
   "fb1869cae2cbaaba15bcb8dc": {
@@ -227,16 +287,16 @@
     "lastSeenAtMs": 1795523731868,
     "existsInFirestore": true
   },
-  "df505e8ac923818b8652e5e3": {
-    "visitorId": "df505e8ac923818b8652e5e3",
+  "5c87e60a31ab8611b418d6ed": {
+    "visitorId": "5c87e60a31ab8611b418d6ed",
     "username": "プレイヤー1",
     "isAdminVerified": false,
-    "dayKey": "2026-11-24",
+    "dayKey": "2026-11-25",
     "isOnline": true,
-    "lastLoginAt": "2026-11-24T12:38:08.155Z",
-    "lastLoginAtMs": 1795523888155,
-    "lastSeenAt": "2026-11-24T12:38:08.155Z",
-    "lastSeenAtMs": 1795523888155,
+    "lastLoginAt": "2026-11-24T23:12:24.422Z",
+    "lastLoginAtMs": 1795561944422,
+    "lastSeenAt": "2026-11-24T23:12:24.422Z",
+    "lastSeenAtMs": 1795561944422,
     "existsInFirestore": true
   }
 }

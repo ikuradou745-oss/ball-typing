@@ -785,6 +785,203 @@ body {
   }
 }
 
+.battle-projectile-targeted {
+  position: absolute;
+  left: var(--fx-start-x, 50%);
+  top: var(--fx-start-y, 50%);
+  width: 28px;
+  height: 28px;
+  margin-left: -14px;
+  margin-top: -14px;
+  pointer-events: none;
+  animation: fx-targeted-fly calc(230ms / var(--battle-speed, 1)) cubic-bezier(0.2, 0.8, 0.4, 1) forwards;
+}
+
+.battle-projectile-targeted.battle-projectile-fire {
+  width: 38px;
+  height: 38px;
+  margin-left: -19px;
+  margin-top: -19px;
+  filter: drop-shadow(0 0 10px rgba(249, 115, 22, 0.95));
+}
+
+.battle-projectile-targeted.battle-projectile-ice {
+  width: 42px;
+  height: 28px;
+  margin-left: -21px;
+  margin-top: -14px;
+  filter: drop-shadow(0 0 9px rgba(56, 189, 248, 0.95));
+}
+
+.battle-projectile-targeted.battle-projectile-parry {
+  width: 36px;
+  height: 36px;
+  margin-left: -18px;
+  margin-top: -18px;
+  filter: drop-shadow(0 0 10px rgba(250, 204, 21, 0.95));
+}
+
+@keyframes fx-targeted-fly {
+  0% {
+    transform: translate(0, 0) rotate(var(--fx-angle, 0deg)) scale(0.78);
+    opacity: 0.95;
+  }
+  55% {
+    transform: translate(calc(var(--fx-dx, 0px) * 0.6), calc(var(--fx-dy, 0px) * 0.6 - 8px))
+      rotate(var(--fx-angle, 0deg)) scale(1.16);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--fx-dx, 0px), var(--fx-dy, 0px)) rotate(var(--fx-angle, 0deg)) scale(1.02);
+    opacity: 0.92;
+  }
+}
+
+.battle-laser-beam {
+  position: absolute;
+  left: var(--fx-start-x, 50%);
+  top: var(--fx-start-y, 50%);
+  width: var(--fx-dist, 160px);
+  height: 22px;
+  margin-top: -11px;
+  transform-origin: 0 50%;
+  transform: rotate(var(--fx-angle, 0deg)) scaleX(0.15);
+  border-radius: 999px;
+  pointer-events: none;
+  animation: fx-laser-fire calc(340ms / var(--battle-speed, 1)) cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.battle-laser-beam-core {
+  position: absolute;
+  inset: 5px 0;
+  border-radius: 999px;
+  background-color: #ffffff;
+}
+
+.battle-laser-beam-blue {
+  background: linear-gradient(90deg, rgba(14, 165, 233, 0.95), rgba(34, 211, 238, 0.98), rgba(186, 230, 253, 0.95));
+  border: 2.5px solid #082f49;
+  box-shadow:
+    0 0 18px rgba(34, 211, 238, 0.95),
+    0 0 34px rgba(14, 165, 233, 0.75);
+}
+
+.battle-laser-beam-red {
+  height: 26px;
+  margin-top: -13px;
+  background: linear-gradient(90deg, rgba(220, 38, 38, 0.98), rgba(249, 115, 22, 0.96), rgba(254, 240, 138, 0.95));
+  border: 2.5px solid #450a0a;
+  box-shadow:
+    0 0 22px rgba(239, 68, 68, 0.98),
+    0 0 40px rgba(249, 115, 22, 0.8);
+}
+
+@keyframes fx-laser-fire {
+  0% {
+    transform: rotate(var(--fx-angle, 0deg)) scaleX(0.55) scaleY(0.65);
+    opacity: 0.95;
+  }
+  20% {
+    transform: rotate(var(--fx-angle, 0deg)) scaleX(1.02) scaleY(1.28);
+    opacity: 1;
+  }
+  75% {
+    transform: rotate(var(--fx-angle, 0deg)) scaleX(1) scaleY(0.9);
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(var(--fx-angle, 0deg)) scaleX(1) scaleY(0.12);
+    opacity: 0;
+  }
+}
+
+.battle-laser-muzzle {
+  position: absolute;
+  left: var(--fx-start-x, 50%);
+  top: var(--fx-start-y, 50%);
+  width: 52px;
+  height: 52px;
+  margin-left: -26px;
+  margin-top: -26px;
+  pointer-events: none;
+  animation: fx-muzzle-flare calc(300ms / var(--battle-speed, 1)) ease-out forwards;
+}
+
+@keyframes fx-muzzle-flare {
+  0% {
+    transform: scale(0.35) rotate(0deg);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.25) rotate(25deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.4) rotate(45deg);
+    opacity: 0;
+  }
+}
+
+.battle-thunder-bolt {
+  position: absolute;
+  left: var(--fx-target-x, 50%);
+  top: 0;
+  width: 68px;
+  height: calc(var(--fx-target-y, 180px) + 20px);
+  margin-left: -34px;
+  pointer-events: none;
+  filter: drop-shadow(0 0 12px rgba(250, 204, 21, 0.98));
+  animation: fx-thunder-strike calc(360ms / var(--battle-speed, 1)) ease-out forwards;
+}
+
+@keyframes fx-thunder-strike {
+  0% {
+    transform: scaleY(0.6) scaleX(1.25);
+    transform-origin: 50% 0%;
+    opacity: 0.98;
+  }
+  20% {
+    transform: scaleY(1.02) scaleX(1.1);
+    opacity: 1;
+  }
+  60% {
+    transform: scaleY(1) scaleX(0.92);
+    opacity: 0.95;
+  }
+  100% {
+    transform: scaleY(1) scaleX(0.25);
+    opacity: 0;
+  }
+}
+
+.battle-heal-wave {
+  position: absolute;
+  left: var(--fx-start-x, 50%);
+  top: var(--fx-start-y, 50%);
+  width: 24px;
+  height: 24px;
+  margin-left: -12px;
+  margin-top: -12px;
+  pointer-events: none;
+  filter: drop-shadow(0 0 8px rgba(40, 199, 111, 0.95));
+  animation: fx-heal-wave-fly calc(320ms / var(--battle-speed, 1)) cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes fx-heal-wave-fly {
+  0% {
+    transform: translate(0, 0) scale(0.7);
+    opacity: 0.95;
+  }
+  55% {
+    transform: translate(calc(var(--fx-dx, 0px) * 0.55), calc(var(--fx-dy, 0px) * 0.55 - 24px)) scale(1.22);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--fx-dx, 0px), var(--fx-dy, 0px)) scale(0.85);
+    opacity: 0;
+  }
+}
+
 .battle-territories {
   position: relative;
   z-index: 2;
@@ -877,11 +1074,307 @@ body {
 }
 
 .battle-unit-laser-charged .battle-unit-sprite-wrap {
-  filter: drop-shadow(0 0 10px #22d3ee) brightness(1.12);
+  animation: fx-blue-laser-pulse calc(900ms / var(--battle-speed, 1)) ease-in-out infinite;
+}
+
+.battle-unit-red-laser-charging .battle-unit-sprite-wrap {
+  filter: drop-shadow(0 0 6px rgba(220, 38, 38, 0.72));
+}
+
+.battle-unit-red-laser-ready .battle-unit-sprite-wrap {
+  animation: fx-red-laser-pulse calc(780ms / var(--battle-speed, 1)) ease-in-out infinite;
 }
 
 .battle-unit-parry-ready .battle-unit-sprite-wrap {
-  filter: drop-shadow(0 0 9px #f6c116) contrast(1.08);
+  animation: fx-parry-gleam calc(950ms / var(--battle-speed, 1)) ease-in-out infinite;
+}
+
+.battle-unit-burning .battle-unit-sprite-wrap {
+  filter: drop-shadow(0 0 8px rgba(249, 115, 22, 0.92));
+}
+
+.battle-unit-frozen .battle-unit-sprite-wrap {
+  filter: drop-shadow(0 0 9px rgba(56, 189, 248, 0.95)) saturate(0.88);
+}
+
+.battle-unit-stunned .battle-unit-sprite-wrap {
+  animation: fx-stun-wobble calc(520ms / var(--battle-speed, 1)) ease-in-out infinite;
+}
+
+@keyframes fx-blue-laser-pulse {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 7px #22d3ee) brightness(1.06);
+  }
+  50% {
+    filter: drop-shadow(0 0 15px #06b6d4) brightness(1.24);
+  }
+}
+
+@keyframes fx-red-laser-pulse {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 7px #ef4444) brightness(1.06);
+  }
+  50% {
+    filter: drop-shadow(0 0 16px #dc2626) brightness(1.24);
+  }
+}
+
+@keyframes fx-parry-gleam {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 7px #f6c116) contrast(1.05);
+  }
+  50% {
+    filter: drop-shadow(0 0 14px #fde047) brightness(1.18) contrast(1.12);
+  }
+}
+
+@keyframes fx-stun-wobble {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 7px rgba(250, 204, 21, 0.9));
+    margin-left: 0;
+  }
+  25% {
+    margin-left: -2.5px;
+  }
+  75% {
+    margin-left: 2.5px;
+  }
+}
+
+.battle-unit-laser-recoil-left {
+  transform: translateX(14px) scale(0.94, 1.06);
+}
+
+.battle-unit-laser-recoil-right {
+  transform: translateX(-14px) scale(0.94, 1.06);
+}
+
+.battle-unit-parry-clang {
+  animation: fx-parry-clang-bounce calc(320ms / var(--battle-speed, 1)) cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes fx-parry-clang-bounce {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.18) translateY(-6px);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.battle-unit-healing {
+  animation: fx-unit-heal-bounce calc(440ms / var(--battle-speed, 1)) cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes fx-unit-heal-bounce {
+  0% {
+    transform: translateY(0) scale(1);
+  }
+  40% {
+    transform: translateY(-7px) scale(1.08);
+    filter: drop-shadow(0 0 12px rgba(40, 199, 111, 0.95));
+  }
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Persistent status & transient unit-local FX overlays inside .battle-unit-sprite-wrap */
+.battle-fx-overlay {
+  position: absolute;
+  inset: -8px;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.battle-fx-flame-aura {
+  inset: -10px -8px -4px;
+  animation: fx-flame-flicker calc(650ms / var(--battle-speed, 1)) ease-in-out infinite alternate;
+}
+
+@keyframes fx-flame-flicker {
+  0% {
+    transform: scale(0.96, 0.97) translateY(1px);
+    opacity: 0.84;
+  }
+  100% {
+    transform: scale(1.05, 1.06) translateY(-2px);
+    opacity: 1;
+  }
+}
+
+.battle-fx-ice-shell {
+  inset: -6px;
+  animation: fx-ice-glimmer calc(1300ms / var(--battle-speed, 1)) ease-in-out infinite alternate;
+}
+
+@keyframes fx-ice-glimmer {
+  0% {
+    transform: scale(0.98);
+    opacity: 0.82;
+  }
+  100% {
+    transform: scale(1.03);
+    opacity: 0.98;
+  }
+}
+
+.battle-unit-stunned .battle-unit-status-row {
+  margin-bottom: 6px;
+}
+
+.battle-fx-stun-halo {
+  inset: -14px -6px auto;
+  height: 24px;
+  animation: fx-stun-halo-bob calc(720ms / var(--battle-speed, 1)) ease-in-out infinite;
+}
+
+@keyframes fx-stun-halo-bob {
+  0%,
+  100% {
+    transform: translateY(0) scaleX(0.95);
+    opacity: 0.92;
+  }
+  50% {
+    transform: translateY(-4px) scaleX(1.06);
+    opacity: 1;
+  }
+}
+
+.battle-fx-magic-circle {
+  inset: -16px;
+  z-index: 5;
+  animation: fx-magic-circle-cast calc(440ms / var(--battle-speed, 1)) cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.battle-fx-magic-circle-fire {
+  filter: drop-shadow(0 0 12px rgba(249, 115, 22, 0.95));
+}
+
+.battle-fx-magic-circle-ice {
+  filter: drop-shadow(0 0 12px rgba(56, 189, 248, 0.95));
+}
+
+.battle-fx-magic-circle-thunder {
+  filter: drop-shadow(0 0 12px rgba(250, 204, 21, 0.98));
+}
+
+@keyframes fx-magic-circle-cast {
+  0% {
+    transform: scale(0.35) rotate(0deg);
+    opacity: 0;
+  }
+  30% {
+    transform: scale(1.12) rotate(70deg);
+    opacity: 1;
+  }
+  75% {
+    transform: scale(1.05) rotate(140deg);
+    opacity: 0.95;
+  }
+  100% {
+    transform: scale(1.28) rotate(200deg);
+    opacity: 0;
+  }
+}
+
+.battle-fx-parry-slash {
+  inset: -14px;
+  z-index: 6;
+  filter: drop-shadow(0 0 12px rgba(250, 204, 21, 0.98));
+  animation: fx-parry-clash calc(360ms / var(--battle-speed, 1)) cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes fx-parry-clash {
+  0% {
+    transform: scale(0.45) rotate(-18deg);
+    opacity: 0.9;
+  }
+  45% {
+    transform: scale(1.24) rotate(6deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.38) rotate(12deg);
+    opacity: 0;
+  }
+}
+
+.battle-fx-parry-pierce {
+  inset: -12px;
+  z-index: 6;
+  filter: drop-shadow(0 0 10px rgba(14, 165, 233, 0.95));
+  animation: fx-parry-clash calc(340ms / var(--battle-speed, 1)) ease-out forwards;
+}
+
+.battle-fx-heal-aura {
+  inset: -14px;
+  z-index: 5;
+  animation: fx-heal-aura-rise calc(520ms / var(--battle-speed, 1)) ease-out forwards;
+}
+
+@keyframes fx-heal-aura-rise {
+  0% {
+    transform: scale(0.6) translateY(6px);
+    opacity: 0.95;
+  }
+  50% {
+    transform: scale(1.12) translateY(-6px);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.25) translateY(-16px);
+    opacity: 0;
+  }
+}
+
+.battle-fx-charge-flare {
+  inset: -14px;
+  z-index: 5;
+  animation: fx-charge-gather calc(420ms / var(--battle-speed, 1)) ease-out forwards;
+}
+
+@keyframes fx-charge-gather {
+  0% {
+    transform: scale(1.45) rotate(0deg);
+    opacity: 0.35;
+  }
+  65% {
+    transform: scale(0.92) rotate(90deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.65) rotate(135deg);
+    opacity: 0;
+  }
+}
+
+.battle-fx-status-burst {
+  inset: -14px;
+  z-index: 6;
+  animation: fx-status-pop calc(380ms / var(--battle-speed, 1)) ease-out forwards;
+}
+
+@keyframes fx-status-pop {
+  0% {
+    transform: scale(0.5);
+    opacity: 1;
+  }
+  55% {
+    transform: scale(1.18);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.32);
+    opacity: 0;
+  }
 }
 
 .battle-unit-status-row {
@@ -1070,7 +1563,32 @@ body {
   height: 56px;
   transform: translateX(-50%);
   pointer-events: none;
+  z-index: 7;
   animation: burst-pop calc(340ms / var(--battle-speed, 1)) ease-out forwards;
+}
+
+.battle-impact-burst-fire {
+  filter: drop-shadow(0 0 10px rgba(249, 115, 22, 0.95));
+}
+
+.battle-impact-burst-ice {
+  filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.95));
+}
+
+.battle-impact-burst-thunder {
+  filter: drop-shadow(0 0 12px rgba(250, 204, 21, 0.98));
+}
+
+.battle-impact-burst-laser {
+  filter: drop-shadow(0 0 12px rgba(34, 211, 238, 0.98));
+}
+
+.battle-impact-burst-red-laser {
+  filter: drop-shadow(0 0 14px rgba(239, 68, 68, 0.98));
+}
+
+.battle-impact-burst-parry {
+  filter: drop-shadow(0 0 12px rgba(253, 224, 71, 0.98));
 }
 
 @keyframes burst-pop {
@@ -3523,9 +4041,29 @@ body {
   .ball-card,
   .battle-unit,
   .battle-unit-hit,
+  .battle-unit-laser-charged .battle-unit-sprite-wrap,
+  .battle-unit-red-laser-ready .battle-unit-sprite-wrap,
+  .battle-unit-parry-ready .battle-unit-sprite-wrap,
+  .battle-unit-stunned .battle-unit-sprite-wrap,
+  .battle-unit-parry-clang,
+  .battle-unit-healing,
   .battle-impact-burst,
   .battle-float-popup,
   .battle-projectile,
+  .battle-projectile-targeted,
+  .battle-laser-beam,
+  .battle-laser-muzzle,
+  .battle-thunder-bolt,
+  .battle-heal-wave,
+  .battle-fx-flame-aura,
+  .battle-fx-ice-shell,
+  .battle-fx-stun-halo,
+  .battle-fx-magic-circle,
+  .battle-fx-parry-slash,
+  .battle-fx-parry-pierce,
+  .battle-fx-heal-aura,
+  .battle-fx-charge-flare,
+  .battle-fx-status-burst,
   .matchmaking-overlay,
   .typing-shield-emblem,
   .typing-shield-hit,
